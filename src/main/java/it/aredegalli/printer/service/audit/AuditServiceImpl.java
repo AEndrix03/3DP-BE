@@ -1,6 +1,6 @@
 package it.aredegalli.printer.service.audit;
 
-import it.aredegalli.printer.enums.AuditEventTypeEnum;
+import it.aredegalli.printer.enums.audit.AuditEventTypeEnum;
 import it.aredegalli.printer.model.audit.AuditEventType;
 import it.aredegalli.printer.model.audit.AuditLog;
 import it.aredegalli.printer.repository.audit.AuditEventTypeRepository;

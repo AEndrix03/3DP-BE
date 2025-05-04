@@ -1,6 +1,6 @@
 package it.aredegalli.printer.service.audit.annotation;
 
-import it.aredegalli.printer.enums.AuditEventTypeEnum;
+import it.aredegalli.printer.enums.audit.AuditEventTypeEnum;
 
 import java.lang.annotation.*;
 

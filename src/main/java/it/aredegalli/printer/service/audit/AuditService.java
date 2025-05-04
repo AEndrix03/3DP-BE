@@ -1,6 +1,6 @@
 package it.aredegalli.printer.service.audit;
 
-import it.aredegalli.printer.enums.AuditEventTypeEnum;
+import it.aredegalli.printer.enums.audit.AuditEventTypeEnum;
 import org.springframework.scheduling.annotation.Async;
 
 import java.util.Map;

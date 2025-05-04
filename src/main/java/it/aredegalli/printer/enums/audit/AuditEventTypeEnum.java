@@ -1,4 +1,4 @@
-package it.aredegalli.printer.enums;
+package it.aredegalli.printer.enums.audit;
 
 public enum AuditEventTypeEnum {
 

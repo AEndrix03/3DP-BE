@@ -1,6 +1,6 @@
 package it.aredegalli.printer.security;
 
-import it.aredegalli.printer.enums.AuditEventTypeEnum;
+import it.aredegalli.printer.enums.audit.AuditEventTypeEnum;
 import it.aredegalli.printer.service.audit.AuditService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
