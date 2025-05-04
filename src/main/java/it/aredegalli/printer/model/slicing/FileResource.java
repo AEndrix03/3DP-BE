@@ -1,4 +1,4 @@
-package it.aredegalli.printer.model.communication;
+package it.aredegalli.printer.model.slicing;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

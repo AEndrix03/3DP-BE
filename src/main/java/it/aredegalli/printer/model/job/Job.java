@@ -1,7 +1,7 @@
 package it.aredegalli.printer.model.job;
 
-import it.aredegalli.printer.model.communication.FileResource;
 import it.aredegalli.printer.model.printer.Printer;
+import it.aredegalli.printer.model.slicing.FileResource;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

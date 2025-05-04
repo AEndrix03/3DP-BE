@@ -39,6 +39,16 @@ CREATE TABLE file_resource
     checksum    TEXT
 );
 
+CREATE TABLE slicing_result
+(
+    id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_file_id    UUID NOT NULL REFERENCES file_resource (id),
+    generated_file_id UUID REFERENCES file_resource (id),
+    parameters        JSONB,
+    logs              TEXT,
+    created_at        TIMESTAMP        DEFAULT now()
+);
+
 CREATE TABLE job
 (
     id                UUID PRIMARY KEY,
