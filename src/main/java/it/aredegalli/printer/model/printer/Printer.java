@@ -24,7 +24,7 @@ public class Printer {
     @Column(nullable = false)
     private String name;
 
-    private String driverId;
+    private UUID driverId;
 
     @ManyToOne
     @JoinColumn(name = "status")

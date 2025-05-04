@@ -6,8 +6,10 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.UuidGenerator;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -17,7 +19,9 @@ import java.time.Instant;
 @Table(name = "driver")
 public class Driver {
     @Id
-    private String id;
+    @GeneratedValue
+    @UuidGenerator
+    private UUID id;
 
     @ManyToOne
     @JoinColumn(name = "printer_id")

@@ -69,7 +69,7 @@ public class LogServiceImpl implements LogService {
     public void fatal(String logger, String message, Map<String, Object> context) {
         log(LogLevelEnum.FATAL, logger, message, context);
     }
-    
+
     private void log(LogLevelEnum level, String logger, String message, Map<String, Object> context) {
         LogLevel _level = logLevelRepository.findById(level.getCode()).orElse(null);
 
@@ -82,6 +82,7 @@ public class LogServiceImpl implements LogService {
                 .message(message)
                 .context(context)
                 .build();
+
 
         log.debug("[Logger] Logging: {}", entry);
 
