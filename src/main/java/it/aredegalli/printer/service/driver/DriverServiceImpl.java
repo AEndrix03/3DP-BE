@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -25,6 +26,14 @@ public class DriverServiceImpl implements DriverService {
         return driverRepository.findById(id)
                 .map(driverMapper::toDto)
                 .orElse(null);
+    }
+
+    @Override
+    public List<DriverDto> getAllDrivers() {
+        return driverRepository.findAll()
+                .stream()
+                .map(driverMapper::toDto)
+                .toList();
     }
 
     @Override

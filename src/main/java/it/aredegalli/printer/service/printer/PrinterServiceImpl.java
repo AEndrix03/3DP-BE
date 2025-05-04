@@ -12,6 +12,7 @@ import it.aredegalli.printer.service.log.LogService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -26,6 +27,13 @@ public class PrinterServiceImpl implements PrinterService {
     @Override
     public PrinterDto getPrinterById(UUID id) {
         return printerRepository.findById(id).map(printerMapper::toDto).orElse(null);
+    }
+
+    @Override
+    public List<PrinterDto> getAllPrinters() {
+        return printerRepository.findAll().stream()
+                .map(printerMapper::toDto)
+                .toList();
     }
 
     @Override
