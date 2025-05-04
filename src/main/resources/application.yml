@@ -1,0 +1,90 @@
+spring:
+  application:
+    name: 3D Printer BE
+
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: ${PRINTER_DB_URL}
+    username: ${PRINTER_DB_USERNAME}
+    password: ${PRINTER_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  devtools:
+    restart:
+      enabled: false
+
+  sql:
+    init:
+      mode: always
+
+# SSL Config (HTTPS enabled with keystore)
+server:
+  address: 0.0.0.0
+  port: 8443
+  ssl:
+    enabled: true
+    key-store: classpath:keystore.p12
+    key-store-password: ${PRINTER_KEYSTORE_PASSWORD}
+    key-store-type: PKCS12
+
+
+# Logging
+logging:
+  level:
+    root: WARN
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql: TRACE
+    it.aredegalli: DEBUG
+    org.springframework.web: DEBUG
+
+# CORS Configuration (can be restricted per environment)
+security:
+  cors:
+    allowed-origins: "*"
+    allowed-methods: "*"
+    allowed-headers: "*"
+  whitelist:
+    ips: ${PRINTER_WHITELIST_IPS}
+
+# AES Encryption Key for sensitive data
+security.crypto:
+  aes-secret-key: ${PRINTER_AES_KEY}
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, beans
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+  info:
+    git:
+      mode: full
+
+# Swagger OpenAPI
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+# HMAC
+hmac:
+  secret:
+    key: ${HMAC_SECRET_KEY}
+
