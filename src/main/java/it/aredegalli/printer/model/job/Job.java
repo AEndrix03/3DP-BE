@@ -35,10 +35,10 @@ public class Job {
     @JoinColumn(name = "status")
     private JobStatus status;
 
-    private Integer progress;
+    private Long progress;
 
     @Column(name = "start_offset_line")
-    private Integer startOffsetLine;
+    private Long startOffsetLine;
 
     private Instant createdAt;
     private Instant startedAt;

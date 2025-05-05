@@ -1,4 +1,4 @@
-package it.aredegalli.printer.service.printer;
+package it.aredegalli.printer.service.slicing;
 
 import it.aredegalli.printer.dto.slicing.SlicingResultDto;
 

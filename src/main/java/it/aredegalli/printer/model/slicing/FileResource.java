@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -31,4 +32,8 @@ public class FileResource {
     private Instant uploadedAt;
 
     private String checksum;
+
+    public Long getTotalLines() {
+        return content != null ? new String(content, StandardCharsets.UTF_8).lines().count() : 0;
+    }
 }

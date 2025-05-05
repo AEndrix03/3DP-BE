@@ -2,7 +2,7 @@ package it.aredegalli.printer.controller.api;
 
 import it.aredegalli.printer.dto.slicing.SlicingResultDto;
 import it.aredegalli.printer.service.log.LogService;
-import it.aredegalli.printer.service.printer.SlicingService;
+import it.aredegalli.printer.service.slicing.SlicingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
