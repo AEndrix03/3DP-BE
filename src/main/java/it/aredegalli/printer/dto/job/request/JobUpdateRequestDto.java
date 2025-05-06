@@ -9,6 +9,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class JobUpdateRequestDto {
 
-    private Integer progress;
+    private Long progress;
 
 }

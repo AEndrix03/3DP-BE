@@ -5,7 +5,6 @@ import it.aredegalli.common.exception.NotFoundException;
 import it.aredegalli.printer.dto.job.JobDto;
 import it.aredegalli.printer.dto.job.request.JobStartRequestDto;
 import it.aredegalli.printer.dto.job.request.JobUpdateRequestDto;
-import it.aredegalli.printer.enums.audit.AuditEventTypeEnum;
 import it.aredegalli.printer.enums.job.JobStatusEnum;
 import it.aredegalli.printer.mapper.job.JobMapper;
 import it.aredegalli.printer.model.job.Job;
@@ -17,7 +16,6 @@ import it.aredegalli.printer.repository.job.JobHistoryRepository;
 import it.aredegalli.printer.repository.job.JobRepository;
 import it.aredegalli.printer.repository.printer.PrinterRepository;
 import it.aredegalli.printer.repository.slicing.FileResourceRepository;
-import it.aredegalli.printer.service.audit.annotation.Audit;
 import it.aredegalli.printer.service.job.status.JobStatusService;
 import it.aredegalli.printer.service.log.LogService;
 import it.aredegalli.printer.service.slicing.FileResourceService;
@@ -63,7 +61,6 @@ public class JobServiceImpl implements JobService {
     }
 
     @Override
-    @Audit(event = AuditEventTypeEnum.JOB_START, description = "Job started")
     public UUID startJob(UUID printerId, UUID resourceId, JobStartRequestDto params) {
         Printer printer = printerRepository.findById(printerId)
                 .orElseThrow(() -> new NotFoundException("Printer not found"));
@@ -85,7 +82,6 @@ public class JobServiceImpl implements JobService {
     }
 
     @Override
-    @Audit(event = AuditEventTypeEnum.JOB_UPDATE, description = "Job update")
     public UUID updateJob(@NotNull UUID jobId, @NotNull JobUpdateRequestDto params) {
         Job job = getJobById(jobId);
 
@@ -95,7 +91,7 @@ public class JobServiceImpl implements JobService {
 
         job.setProgress(params.getProgress());
 
-        if (job.getProgress().longValue() >= job.getFileResource().getTotalLines()) {
+        if (job.getProgress() >= job.getFileResource().getTotalLines()) {
             return this.completeJob(job.getId(), "Reached end of file");
         }
 
@@ -104,7 +100,6 @@ public class JobServiceImpl implements JobService {
     }
 
     @Override
-    @Audit(event = AuditEventTypeEnum.JOB_COMPLETE, description = "Job complete")
     public UUID completeJob(@NotNull UUID jobId, String reason) {
         Job job = getJobById(jobId);
 
@@ -118,7 +113,6 @@ public class JobServiceImpl implements JobService {
         return jobRepository.save(job).getId();
     }
 
-    @Audit(event = AuditEventTypeEnum.JOB_CANCELLED, description = "Job cancelled")
     @Override
     public UUID cancelJob(@NotNull UUID jobId, String reason) {
         Job job = getJobById(jobId);
@@ -135,7 +129,6 @@ public class JobServiceImpl implements JobService {
         return jobRepository.save(job).getId();
     }
 
-    @Audit(event = AuditEventTypeEnum.JOB_ENQUEUED, description = "Job enqueued")
     @Override
     public UUID enqueue(@NotNull UUID jobId) {
         Job job = getJobById(jobId);
@@ -150,7 +143,6 @@ public class JobServiceImpl implements JobService {
         return jobRepository.save(job).getId();
     }
 
-    @Audit(event = AuditEventTypeEnum.JOB_PAUSED, description = "Job paused")
     @Override
     public UUID pauseJob(@NotNull UUID jobId, String reason) {
         Job job = getJobById(jobId);
@@ -165,7 +157,6 @@ public class JobServiceImpl implements JobService {
         return jobRepository.save(job).getId();
     }
 
-    @Audit(event = AuditEventTypeEnum.JOB_RESUMED, description = "Job resumed")
     @Override
     public UUID resumeJob(@NotNull UUID jobId) {
         Job job = getJobById(jobId);
@@ -180,7 +171,6 @@ public class JobServiceImpl implements JobService {
         return jobRepository.save(job).getId();
     }
 
-    @Audit(event = AuditEventTypeEnum.JOB_RUN, description = "Job running")
     @Override
     public UUID runJob(UUID jobId) {
         Job job = getJobById(jobId);

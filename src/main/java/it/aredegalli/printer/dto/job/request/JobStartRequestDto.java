@@ -9,6 +9,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class JobStartRequestDto {
 
-    private Integer startOffsetLine;
+    private Long startOffsetLine;
 
 }

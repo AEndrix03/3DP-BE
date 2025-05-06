@@ -2,12 +2,14 @@ package it.aredegalli.printer;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
+@EnableScheduling
 public class PrinterApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(PrinterApplication.class, args);
-	}
+    public static void main(String[] args) {
+        SpringApplication.run(PrinterApplication.class, args);
+    }
 
 }
