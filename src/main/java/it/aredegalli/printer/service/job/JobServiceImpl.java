@@ -91,7 +91,7 @@ public class JobServiceImpl implements JobService {
 
         job.setProgress(params.getProgress());
 
-        if (job.getProgress() >= job.getFileResource().getTotalLines()) {
+        if (job.getProgress() >= job.getSlicingResult().getLines()) {
             return this.completeJob(job.getId(), "Reached end of file");
         }
 

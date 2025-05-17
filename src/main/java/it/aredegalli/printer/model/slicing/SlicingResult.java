@@ -6,12 +6,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.Map;
-import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -22,17 +20,16 @@ import java.util.UUID;
 public class SlicingResult {
 
     @Id
-    @GeneratedValue
-    @UuidGenerator
-    private UUID id;
+    @Column(updatable = false, nullable = false)
+    private byte[] id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "source_file_id", nullable = false)
-    private FileResource sourceFile;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "generated_file_id")
+    @JoinColumn(name = "id", referencedColumnName = "hash", nullable = false)
     private FileResource generatedFile;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_hash", referencedColumnName = "hash", nullable = false)
+    private FileResource sourceFile;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
@@ -42,4 +39,6 @@ public class SlicingResult {
     private String logs;
 
     private Instant createdAt = Instant.now();
+
+    private Long lines;
 }

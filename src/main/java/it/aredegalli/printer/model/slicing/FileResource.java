@@ -1,14 +1,15 @@
 package it.aredegalli.printer.model.slicing;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -18,22 +19,14 @@ import java.util.UUID;
 @Table(name = "file_resource")
 public class FileResource {
     @Id
-    @GeneratedValue(generator = "UUID")
     @Column(updatable = false, nullable = false)
-    private UUID id;
+    private byte[] hash;
 
     @Column(name = "file_name", nullable = false)
     private String fileName;
 
-    @Lob
-    @Column(nullable = false)
-    private byte[] content;
+    @Column(name = "file_type", nullable = false)
+    private String fileType;
 
     private Instant uploadedAt;
-
-    private String checksum;
-
-    public Long getTotalLines() {
-        return content != null ? new String(content, StandardCharsets.UTF_8).lines().count() : 0;
-    }
 }

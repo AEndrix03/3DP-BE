@@ -1,7 +1,7 @@
 package it.aredegalli.printer.model.job;
 
 import it.aredegalli.printer.model.printer.Printer;
-import it.aredegalli.printer.model.slicing.FileResource;
+import it.aredegalli.printer.model.slicing.SlicingResult;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,8 +28,8 @@ public class Job {
     private Printer printer;
 
     @ManyToOne
-    @JoinColumn(name = "file_id")
-    private FileResource fileResource;
+    @JoinColumn(name = "file_hash", referencedColumnName = "id")
+    private SlicingResult slicingResult;
 
     @ManyToOne
     @JoinColumn(name = "status")
