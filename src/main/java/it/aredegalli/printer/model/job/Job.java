@@ -1,5 +1,7 @@
 package it.aredegalli.printer.model.job;
 
+import it.aredegalli.printer.enums.job.JobStatusEnum;
+import it.aredegalli.printer.enums.job.JobStatusEnumConverter;
 import it.aredegalli.printer.model.printer.Printer;
 import it.aredegalli.printer.model.slicing.SlicingResult;
 import jakarta.persistence.*;
@@ -18,27 +20,29 @@ import java.util.UUID;
 @Entity
 @Table(name = "job")
 public class Job {
+
     @Id
-    @GeneratedValue(generator = "UUID")
-    @Column(updatable = false, nullable = false)
+    @GeneratedValue
+    @Column(nullable = false, updatable = false)
     private UUID id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "printer_id")
     private Printer printer;
 
-    @ManyToOne
-    @JoinColumn(name = "file_hash", referencedColumnName = "id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "slicing_id", nullable = false)
     private SlicingResult slicingResult;
 
-    @ManyToOne
-    @JoinColumn(name = "status")
-    private JobStatus status;
+    @Convert(converter = JobStatusEnumConverter.class)
+    @Column(name = "status", nullable = false, length = 3)
+    private JobStatusEnum status;
 
-    private Long progress;
+    @Column
+    private Integer progress;
 
     @Column(name = "start_offset_line")
-    private Long startOffsetLine;
+    private Integer startOffsetLine;
 
     private Instant createdAt;
     private Instant startedAt;

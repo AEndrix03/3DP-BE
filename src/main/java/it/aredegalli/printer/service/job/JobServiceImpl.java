@@ -61,7 +61,7 @@ public class JobServiceImpl implements JobService {
     }
 
     @Override
-    public UUID startJob(UUID printerId, UUID resourceId, JobStartRequestDto params) {
+    public UUID startJob(UUID printerId, byte[] resourceId, JobStartRequestDto params) {
         Printer printer = printerRepository.findById(printerId)
                 .orElseThrow(() -> new NotFoundException("Printer not found"));
         FileResource fileResource = fileResourceRepository.findById(resourceId)

@@ -5,11 +5,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
-import java.util.Map;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -20,25 +18,24 @@ import java.util.Map;
 public class SlicingResult {
 
     @Id
-    @Column(updatable = false, nullable = false)
-    private byte[] id;
+    @GeneratedValue
+    @Column(nullable = false, updatable = false)
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id", referencedColumnName = "hash", nullable = false)
-    private FileResource generatedFile;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "source_hash", referencedColumnName = "hash", nullable = false)
+    @JoinColumn(name = "source_resource_id", nullable = false)
     private FileResource sourceFile;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
-    private Map<String, Object> parameters;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "generated_resource_id", nullable = false)
+    private FileResource generatedFile;
 
-    @Column(columnDefinition = "TEXT")
-    private String logs;
+    @Column(nullable = false)
+    private int lines;
 
-    private Instant createdAt = Instant.now();
+    @Column(name = "created_at", nullable = false, columnDefinition = "TIMESTAMPTZ DEFAULT now()")
+    private Instant createdAt;
 
-    private Long lines;
+    @Column(name = "generation_external_id", nullable = false)
+    private UUID generationExternalId;
 }
