@@ -1,17 +1,14 @@
 package it.aredegalli.printer.service.slicing;
 
-import it.aredegalli.printer.dto.slicing.FileUploadResponseDto;
-import jakarta.validation.constraints.NotNull;
+import it.aredegalli.printer.model.slicing.FileResource;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.util.List;
+import java.io.InputStream;
 import java.util.UUID;
 
 public interface FileResourceService {
-    FileUploadResponseDto uploadFile(@NotNull MultipartFile file) throws IOException;
 
-    byte[] downloadFile(@NotNull UUID id);
+    FileResource upload(MultipartFile file);
 
-    List<FileUploadResponseDto> getAllFiles();
+    InputStream download(UUID id);
 }

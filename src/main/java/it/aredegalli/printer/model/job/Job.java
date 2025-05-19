@@ -37,14 +37,19 @@ public class Job {
     @Convert(converter = JobStatusEnumConverter.class)
     @Column(name = "status", nullable = false, length = 3)
     private JobStatusEnum status;
-    
+
     @Column
     private Integer progress;
 
     @Column(name = "start_offset_line")
     private Integer startOffsetLine;
 
+    @Column(name = "created_at")
     private Instant createdAt;
+
+    @Column(name = "started_at")
     private Instant startedAt;
+
+    @Column(name = "finished_at")
     private Instant finishedAt;
 }
