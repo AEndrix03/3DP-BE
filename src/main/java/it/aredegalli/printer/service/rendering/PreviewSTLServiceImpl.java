@@ -14,7 +14,7 @@ import java.util.Base64;
 
 @Service
 @RequiredArgsConstructor
-public class PreviewServiceImpl implements PreviewService {
+public class PreviewSTLServiceImpl implements PreviewSTLService {
     private final StorageService storage;
     private final JmeRenderingService renderer;
 

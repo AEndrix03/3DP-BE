@@ -1,8 +1,10 @@
 package it.aredegalli.printer.service.slicing;
 
+import it.aredegalli.printer.dto.slicing.model.ModelDto;
 import it.aredegalli.printer.dto.storage.UploadResult;
 import it.aredegalli.printer.model.slicing.FileResource;
 import it.aredegalli.printer.repository.slicing.FileResourceRepository;
+import it.aredegalli.printer.service.rendering.PreviewSTLService;
 import it.aredegalli.printer.service.storage.StorageService;
 import it.aredegalli.printer.util.PrinterCostants;
 import jakarta.persistence.EntityNotFoundException;
@@ -13,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -21,6 +24,7 @@ public class FileResourceServiceImpl implements FileResourceService {
 
     private final FileResourceRepository repo;
     private final StorageService storage;
+    private final PreviewSTLService previewSTLService;
 
     @Override
     public FileResource upload(MultipartFile file) {
@@ -54,5 +58,17 @@ public class FileResourceServiceImpl implements FileResourceService {
         FileResource fr = repo.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("File non trovato: " + id));
         return storage.download(fr.getBucketName(), fr.getObjectKey());
+    }
+
+    @Override
+    public List<ModelDto> getAllModels() {
+        return repo.findAll()
+                .stream()
+                .map(model -> ModelDto.builder()
+                        .id(model.getId())
+                        .name(model.getFileName())
+                        .imagePreview(previewSTLService.previewToBase64(model.getBucketName(), model.getObjectKey(), 200, 200))
+                        .build())
+                .toList();
     }
 }

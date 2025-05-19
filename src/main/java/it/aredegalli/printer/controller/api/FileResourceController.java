@@ -1,17 +1,19 @@
 package it.aredegalli.printer.controller.api;
 
-import it.aredegalli.printer.dto.slicing.FileUploadResponseDto;
+import it.aredegalli.printer.dto.slicing.model.ModelDto;
 import it.aredegalli.printer.service.log.LogService;
 import it.aredegalli.printer.service.slicing.FileResourceService;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 import java.util.UUID;
 
@@ -24,10 +26,10 @@ public class FileResourceController {
     private final LogService log;
 
     @PostMapping("/upload")
-    public ResponseEntity<FileUploadResponseDto> upload(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<UUID> upload(@RequestParam("file") MultipartFile file) {
         try {
             log.info("FileResourceController", "Uploading file: " + file.getOriginalFilename());
-            return ResponseEntity.ok(fileResourceService.uploadFile(file));
+            return ResponseEntity.ok(fileResourceService.upload(file).getId());
         } catch (Exception e) {
             log.error("FileResourceController", "Upload failed: " + e.getMessage());
             throw new RuntimeException("Upload failed", e);
@@ -35,21 +37,35 @@ public class FileResourceController {
     }
 
     @GetMapping("/{id}/download")
-    public ResponseEntity<ByteArrayResource> download(@PathVariable @NotNull UUID id) {
-        byte[] content = fileResourceService.downloadFile(id);
+    public ResponseEntity<StreamingResponseBody> download(@PathVariable @NotNull UUID id) {
         log.info("FileResourceController", "Download requested for file ID: " + id);
-        ByteArrayResource resource = new ByteArrayResource(content);
 
+        // Create a StreamingResponseBody that consumes the InputStream and writes directly to the response body
+        StreamingResponseBody responseBody = outputStream -> {
+            try (InputStream inputStream = fileResourceService.download(id)) {
+                // Transfer bytes directly from input stream to output stream
+                byte[] buffer = new byte[4096]; // Reasonable buffer size
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+                outputStream.flush();
+            } catch (IOException e) {
+                log.error("FileResourceController", "Error streaming file with ID: " + id);
+                throw new RuntimeException("Error streaming file", e);
+            }
+        };
+
+        // Content length is unknown in advance since we're not loading the file into memory
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + id + "\"")
-                .contentLength(content.length)
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .body(resource);
+                .body(responseBody);
     }
 
     @GetMapping
-    public ResponseEntity<List<FileUploadResponseDto>> getAllFiles() {
+    public ResponseEntity<List<ModelDto>> getAllFiles() {
         log.info("FileResourceController", "Listing all uploaded files");
-        return ResponseEntity.ok(fileResourceService.getAllFiles());
+        return ResponseEntity.ok(fileResourceService.getAllModels());
     }
 }
