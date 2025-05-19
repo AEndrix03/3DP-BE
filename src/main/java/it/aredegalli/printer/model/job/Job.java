@@ -37,7 +37,7 @@ public class Job {
     @Convert(converter = JobStatusEnumConverter.class)
     @Column(name = "status", nullable = false, length = 3)
     private JobStatusEnum status;
-
+    
     @Column
     private Integer progress;
 
