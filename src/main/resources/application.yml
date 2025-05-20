@@ -2,6 +2,11 @@ spring:
   application:
     name: 3D Printer BE
 
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
   datasource:
     driver-class-name: org.postgresql.Driver
     url: ${PRINTER_DB_URL}

@@ -119,43 +119,6 @@
             <version>1.15</version>
         </dependency>
 
-        <!-- JMonkey rendering STL -->
-
-        <!-- Core del motore 3D -->
-        <dependency>
-            <groupId>org.jmonkeyengine</groupId>
-            <artifactId>jme3-core</artifactId>
-            <version>${jme3.version}</version>
-        </dependency>
-
-        <!-- Backend desktop (incl. LWJGL2/3 e native libs) -->
-        <dependency>
-            <groupId>org.jmonkeyengine</groupId>
-            <artifactId>jme3-desktop</artifactId>
-            <version>${jme3.version}</version>
-        </dependency>
-
-        <!-- Renderer LWJGL3 (meglio per offscreen su JVM headless) -->
-        <dependency>
-            <groupId>org.jmonkeyengine</groupId>
-            <artifactId>jme3-lwjgl3</artifactId>
-            <version>${jme3.version}</version>
-        </dependency>
-
-        <!-- Plugin per caricare STL (Binary e ASCII) -->
-        <dependency>
-            <groupId>org.jmonkeyengine</groupId>
-            <artifactId>jme3-plugins</artifactId>
-            <version>${jme3.version}</version>
-        </dependency>
-        
-        <!-- MonkeyWrench - Libreria moderna per il caricamento di modelli 3D in vari formati incluso STL -->
-        <dependency>
-            <groupId>com.github.stephengold</groupId>
-            <artifactId>MonkeyWrench</artifactId>
-            <version>1.0.0</version>
-        </dependency>
-
     </dependencies>
 
     <build>
