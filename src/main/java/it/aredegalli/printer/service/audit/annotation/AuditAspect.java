@@ -45,7 +45,7 @@ public class AuditAspect {
             throw ex;
         } finally {
             metadata.put("success", success);
-            auditService.logEvent(null, audit.event(), audit.description(),
+            auditService.logEvent(audit.event(), audit.description(),
                     auditService.buildMetadata(audit.event(), metadata));
         }
 

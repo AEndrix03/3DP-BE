@@ -26,12 +26,11 @@ public class AuditServiceImpl implements AuditService {
 
     @Async
     @Override
-    public void logEvent(String assegnatarioId, AuditEventTypeEnum eventEnum, String description, Map<String, Object> metadata) {
+    public void logEvent(AuditEventTypeEnum eventEnum, String description, Map<String, Object> metadata) {
         AuditEventType eventType = eventTypeRepository.findByDescription(eventEnum.name())
                 .orElseGet(() -> eventTypeRepository.save(AuditEventType.builder().description(eventEnum.name()).build()));
 
         AuditLog audit = AuditLog.builder()
-                .assegnatarioId(assegnatarioId)
                 .eventType(eventType)
                 .description(description)
                 .metadata(metadata)

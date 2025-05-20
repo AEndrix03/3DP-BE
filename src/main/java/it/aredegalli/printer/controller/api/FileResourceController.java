@@ -25,7 +25,7 @@ public class FileResourceController {
     private final FileResourceService fileResourceService;
     private final LogService log;
 
-    @PostMapping("/upload")
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<UUID> upload(@RequestParam("file") MultipartFile file) {
         try {
             log.info("FileResourceController", "Uploading file: " + file.getOriginalFilename());
@@ -36,8 +36,8 @@ public class FileResourceController {
         }
     }
 
-    @GetMapping("/{id}/download")
-    public ResponseEntity<StreamingResponseBody> download(@PathVariable @NotNull UUID id) {
+    @GetMapping("/download")
+    public ResponseEntity<StreamingResponseBody> download(@RequestParam("id") @NotNull UUID id) {
         log.info("FileResourceController", "Download requested for file ID: " + id);
 
         // Create a StreamingResponseBody that consumes the InputStream and writes directly to the response body

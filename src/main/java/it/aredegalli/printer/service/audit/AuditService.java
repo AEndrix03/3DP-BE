@@ -13,13 +13,12 @@ public interface AuditService {
     /**
      * Logs an audit event asynchronously.
      *
-     * @param assegnatarioId the user associated with the event
-     * @param eventEnum      the type of audit event
-     * @param description    a description of the event
-     * @param metadata       additional metadata related to the event
+     * @param eventEnum   the type of audit event
+     * @param description a description of the event
+     * @param metadata    additional metadata related to the event
      */
     @Async
-    void logEvent(String assegnatarioId, AuditEventTypeEnum eventEnum, String description, Map<String, Object> metadata);
+    void logEvent(AuditEventTypeEnum eventEnum, String description, Map<String, Object> metadata);
 
     /**
      * Builds metadata for an audit event.

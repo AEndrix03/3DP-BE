@@ -33,12 +33,6 @@ public class AuditLog {
     private Instant timestamp = Instant.now();
 
     /**
-     * Id dell’assegnatario che ha scatenato l’evento (senza FK)
-     */
-    @Column(name = "assegnatario_id", nullable = false, length = 100)
-    private String assegnatarioId;
-
-    /**
      * Tipo di evento (FK a audit_event_type)
      */
     @ManyToOne(fetch = FetchType.LAZY)

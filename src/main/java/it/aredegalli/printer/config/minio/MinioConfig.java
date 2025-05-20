@@ -14,7 +14,7 @@ import java.net.URI;
 @Configuration
 public class MinioConfig {
 
-    @Value("${minio.host}")
+    @Value("${minio.endpoint}")
     private String host;
 
     @Value("${minio.port}")

@@ -32,7 +32,7 @@ public class JobSchedulerService {
         log.debug("JobSchedulerService - Checking for queued jobs to run");
         handleQueuedJobs();
     }
-    
+
     private void handleQueuedJobs() {
         Map<UUID, Job> queuedJobs = queuedJobsPerPrinterRepository.findAll().stream()
                 .collect(Collectors.toMap(QueuedJobsPerPrinter::getPrinterId, QueuedJobsPerPrinter::getJob));
@@ -42,7 +42,7 @@ public class JobSchedulerService {
 
         for (Map.Entry<UUID, Job> entry : queuedJobs.entrySet()) {
             if (!runningJobs.contains(entry.getKey())) {
-                jobService.runJob(entry.getValue().getId());
+                //jobService.runJob(entry.getValue().getId());
             }
         }
     }

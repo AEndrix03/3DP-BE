@@ -1,37 +1,13 @@
 package it.aredegalli.printer.service.job;
 
-import it.aredegalli.common.exception.BadRequestException;
-import it.aredegalli.common.exception.NotFoundException;
-import it.aredegalli.printer.dto.job.JobDto;
-import it.aredegalli.printer.dto.job.request.JobStartRequestDto;
-import it.aredegalli.printer.dto.job.request.JobUpdateRequestDto;
-import it.aredegalli.printer.enums.job.JobStatusEnum;
-import it.aredegalli.printer.mapper.job.JobMapper;
-import it.aredegalli.printer.model.job.Job;
-import it.aredegalli.printer.model.job.JobHistory;
-import it.aredegalli.printer.model.job.JobStatus;
-import it.aredegalli.printer.model.printer.Printer;
-import it.aredegalli.printer.model.slicing.FileResource;
-import it.aredegalli.printer.repository.job.JobHistoryRepository;
-import it.aredegalli.printer.repository.job.JobRepository;
-import it.aredegalli.printer.repository.printer.PrinterRepository;
-import it.aredegalli.printer.repository.slicing.FileResourceRepository;
-import it.aredegalli.printer.service.job.status.JobStatusService;
-import it.aredegalli.printer.service.log.LogService;
-import it.aredegalli.printer.service.slicing.FileResourceService;
-import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class JobServiceImpl implements JobService {
 
-    private final JobRepository jobRepository;
+    /*private final JobRepository jobRepository;
     private final LogService log;
     private final JobStatusService jobStatusService;
     private final JobHistoryRepository jobHistoryRepository;
@@ -209,6 +185,6 @@ public class JobServiceImpl implements JobService {
     private Job getJobById(UUID jobId) {
         return jobRepository.findById(jobId)
                 .orElseThrow(() -> new NotFoundException("Job not found"));
-    }
+    }*/
 
 }
