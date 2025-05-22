@@ -67,7 +67,7 @@ public class FileResourceServiceImpl implements FileResourceService {
                 .map(model -> ModelDto.builder()
                         .id(model.getId())
                         .name(model.getFileName())
-                        .imagePreview(previewSTLService.modelToThreeJS(model.getBucketName(), model.getObjectKey()))
+                        .imagePreview(previewSTLService.previewToBase64(model.getBucketName(), model.getObjectKey(), 200, 200))
                         .build())
                 .toList();
     }
