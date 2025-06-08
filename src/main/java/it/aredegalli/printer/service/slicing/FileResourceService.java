@@ -14,5 +14,7 @@ public interface FileResourceService {
 
     InputStream download(UUID id);
 
+    InputStream downloadGlb(UUID id);
+
     List<ModelDto> getAllModels();
 }

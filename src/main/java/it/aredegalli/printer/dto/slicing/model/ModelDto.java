@@ -15,6 +15,5 @@ public class ModelDto {
 
     private UUID id;
     private String name;
-    private String imagePreview;
 
 }

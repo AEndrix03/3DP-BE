@@ -99,3 +99,6 @@ minio:
   secret-key: ${MINIO_SECRET_KEY}
   port: ${MINIO_PORT}
   region: us-east-1
+
+stl2glb:
+  url: http://dev.aredegalli.it:9002

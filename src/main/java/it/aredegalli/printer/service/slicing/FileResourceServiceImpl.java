@@ -4,7 +4,7 @@ import it.aredegalli.printer.dto.slicing.model.ModelDto;
 import it.aredegalli.printer.dto.storage.UploadResult;
 import it.aredegalli.printer.model.slicing.FileResource;
 import it.aredegalli.printer.repository.slicing.FileResourceRepository;
-import it.aredegalli.printer.service.rendering.PreviewSTLService;
+import it.aredegalli.printer.service.glb.StlGlbConvertService;
 import it.aredegalli.printer.service.storage.StorageService;
 import it.aredegalli.printer.util.PrinterCostants;
 import jakarta.persistence.EntityNotFoundException;
@@ -24,7 +24,7 @@ public class FileResourceServiceImpl implements FileResourceService {
 
     private final FileResourceRepository repo;
     private final StorageService storage;
-    private final PreviewSTLService previewSTLService;
+    private final StlGlbConvertService stlGlbConvertService;
 
     @Override
     public FileResource upload(MultipartFile file) {
@@ -35,6 +35,8 @@ public class FileResourceServiceImpl implements FileResourceService {
                     file.getContentType(),
                     PrinterCostants.PRINTER_MODEL_STORAGE_BUCKET_NAME
             );
+
+            stlGlbConvertService.convertStlToGlb(result.getObjectKey());
 
             FileResource fr = FileResource.builder()
                     .fileName(file.getOriginalFilename())
@@ -61,14 +63,21 @@ public class FileResourceServiceImpl implements FileResourceService {
     }
 
     @Override
+    public InputStream downloadGlb(UUID id) {
+        FileResource fr = repo.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("File non trovato: " + id));
+        return stlGlbConvertService.downloadGlbByObjectkey(fr.getObjectKey());
+    }
+
+    @Override
     public List<ModelDto> getAllModels() {
         return repo.findAll()
                 .stream()
                 .map(model -> ModelDto.builder()
                         .id(model.getId())
                         .name(model.getFileName())
-                        .imagePreview(previewSTLService.previewToBase64(model.getBucketName(), model.getObjectKey(), 200, 200))
                         .build())
                 .toList();
     }
+
 }

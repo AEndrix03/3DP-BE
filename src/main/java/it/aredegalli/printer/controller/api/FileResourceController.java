@@ -39,12 +39,25 @@ public class FileResourceController {
     @GetMapping("/download")
     public ResponseEntity<StreamingResponseBody> download(@RequestParam("id") @NotNull UUID id) {
         log.info("FileResourceController", "Download requested for file ID: " + id);
+        return _download(fileResourceService.download(id), id);
+    }
 
-        // Create a StreamingResponseBody that consumes the InputStream and writes directly to the response body
+    @GetMapping("/download/glb")
+    public ResponseEntity<StreamingResponseBody> downloadGlb(@RequestParam("id") @NotNull UUID id) {
+        log.info("FileResourceController", "GLB Download requested for file ID: " + id);
+        return _download(fileResourceService.downloadGlb(id), id);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<ModelDto>> getAllFiles() {
+        log.info("FileResourceController", "Listing all uploaded files");
+        return ResponseEntity.ok(fileResourceService.getAllModels());
+    }
+
+    private ResponseEntity<StreamingResponseBody> _download(InputStream inputStream, UUID id) {
         StreamingResponseBody responseBody = outputStream -> {
-            try (InputStream inputStream = fileResourceService.download(id)) {
-                // Transfer bytes directly from input stream to output stream
-                byte[] buffer = new byte[4096]; // Reasonable buffer size
+            try (inputStream) {
+                byte[] buffer = new byte[4096];
                 int bytesRead;
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
                     outputStream.write(buffer, 0, bytesRead);
@@ -56,16 +69,9 @@ public class FileResourceController {
             }
         };
 
-        // Content length is unknown in advance since we're not loading the file into memory
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + id + "\"")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(responseBody);
-    }
-
-    @GetMapping
-    public ResponseEntity<List<ModelDto>> getAllFiles() {
-        log.info("FileResourceController", "Listing all uploaded files");
-        return ResponseEntity.ok(fileResourceService.getAllModels());
     }
 }
