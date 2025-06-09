@@ -1,13 +1,15 @@
 package it.aredegalli.printer.service.slicing;
 
-import it.aredegalli.printer.dto.slicing.model.ModelDto;
 import it.aredegalli.printer.dto.storage.UploadResult;
+import it.aredegalli.printer.model.model.Model;
 import it.aredegalli.printer.model.slicing.FileResource;
+import it.aredegalli.printer.repository.model.ModelRepository;
 import it.aredegalli.printer.repository.slicing.FileResourceRepository;
 import it.aredegalli.printer.service.glb.StlGlbConvertService;
 import it.aredegalli.printer.service.storage.StorageService;
 import it.aredegalli.printer.util.PrinterCostants;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -15,7 +17,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -25,8 +26,10 @@ public class FileResourceServiceImpl implements FileResourceService {
     private final FileResourceRepository repo;
     private final StorageService storage;
     private final StlGlbConvertService stlGlbConvertService;
+    private final ModelRepository modelRepository;
 
     @Override
+    @Transactional
     public FileResource upload(MultipartFile file) {
         try {
             UploadResult result = storage.upload(
@@ -48,8 +51,18 @@ public class FileResourceServiceImpl implements FileResourceService {
                     .uploadedAt(Instant.now())
                     .build();
 
-            return repo.save(fr);
+            fr = repo.save(fr);
 
+            Model model = Model.builder()
+                    .name(fr.getFileName())
+                    .createdAt(Instant.now())
+                    .updatedAt(Instant.now())
+                    .fileResource(fr)
+                    .build();
+
+            this.modelRepository.save(model);
+
+            return fr;
         } catch (IOException e) {
             throw new RuntimeException("Upload fallito", e);
         }
@@ -67,17 +80,6 @@ public class FileResourceServiceImpl implements FileResourceService {
         FileResource fr = repo.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("File non trovato: " + id));
         return stlGlbConvertService.downloadGlbByObjectkey(fr.getObjectKey());
-    }
-
-    @Override
-    public List<ModelDto> getAllModels() {
-        return repo.findAll()
-                .stream()
-                .map(model -> ModelDto.builder()
-                        .id(model.getId())
-                        .name(model.getFileName())
-                        .build())
-                .toList();
     }
 
 }

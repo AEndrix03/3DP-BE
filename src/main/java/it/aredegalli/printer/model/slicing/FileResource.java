@@ -27,7 +27,7 @@ public class FileResource {
     @Column(name = "file_name", nullable = false)
     private String fileName;
 
-    @Column(name = "file_type", nullable = false, length = 255)
+    @Column(name = "file_type", nullable = false)
     private String fileType;
 
     @Column(name = "file_size", nullable = false)

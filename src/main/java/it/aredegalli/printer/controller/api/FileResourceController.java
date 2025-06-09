@@ -1,6 +1,5 @@
 package it.aredegalli.printer.controller.api;
 
-import it.aredegalli.printer.dto.slicing.model.ModelDto;
 import it.aredegalli.printer.service.log.LogService;
 import it.aredegalli.printer.service.slicing.FileResourceService;
 import jakarta.validation.constraints.NotNull;
@@ -14,7 +13,6 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -46,12 +44,6 @@ public class FileResourceController {
     public ResponseEntity<StreamingResponseBody> downloadGlb(@RequestParam("id") @NotNull UUID id) {
         log.info("FileResourceController", "GLB Download requested for file ID: " + id);
         return _download(fileResourceService.downloadGlb(id), id);
-    }
-
-    @GetMapping
-    public ResponseEntity<List<ModelDto>> getAllFiles() {
-        log.info("FileResourceController", "Listing all uploaded files");
-        return ResponseEntity.ok(fileResourceService.getAllModels());
     }
 
     private ResponseEntity<StreamingResponseBody> _download(InputStream inputStream, UUID id) {
