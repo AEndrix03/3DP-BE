@@ -1,6 +1,6 @@
 package it.aredegalli.printer.service.slicing;
 
-import it.aredegalli.printer.model.slicing.FileResource;
+import it.aredegalli.printer.model.resource.FileResource;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;

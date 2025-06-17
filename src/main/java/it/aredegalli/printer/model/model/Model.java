@@ -1,6 +1,6 @@
 package it.aredegalli.printer.model.model;
 
-import it.aredegalli.printer.model.slicing.FileResource;
+import it.aredegalli.printer.model.resource.FileResource;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

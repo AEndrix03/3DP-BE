@@ -1,5 +1,6 @@
 package it.aredegalli.printer.model.slicing;
 
+import it.aredegalli.printer.model.resource.FileResource;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,12 +31,18 @@ public class SlicingResult {
     @JoinColumn(name = "generated_resource_id", nullable = false)
     private FileResource generatedFile;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "slicing_profile_id", nullable = false)
+    private SlicingProfile slicingProfile;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "material_id", nullable = false)
+    private Material material;
+
     @Column(nullable = false)
-    private int lines;
+    private long lines;
 
     @Column(name = "created_at", nullable = false, columnDefinition = "TIMESTAMPTZ DEFAULT now()")
     private Instant createdAt;
 
-    @Column(name = "generation_external_id", nullable = false)
-    private UUID generationExternalId;
 }

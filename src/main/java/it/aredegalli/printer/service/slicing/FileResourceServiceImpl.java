@@ -2,7 +2,7 @@ package it.aredegalli.printer.service.slicing;
 
 import it.aredegalli.printer.dto.storage.UploadResult;
 import it.aredegalli.printer.model.model.Model;
-import it.aredegalli.printer.model.slicing.FileResource;
+import it.aredegalli.printer.model.resource.FileResource;
 import it.aredegalli.printer.repository.model.ModelRepository;
 import it.aredegalli.printer.repository.slicing.FileResourceRepository;
 import it.aredegalli.printer.service.glb.StlGlbConvertService;
