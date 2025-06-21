@@ -10,8 +10,8 @@ import java.util.List;
 @Mapper(componentModel = "spring", uses = {SlicingProfileMapper.class, MaterialMapper.class})
 public interface SlicingResultMapper {
 
-    @Mapping(target = "id", source = "generatedFile.id")
     @Mapping(target = "sourceId", source = "sourceFile.id")
+    @Mapping(target = "generatedId", source = "generatedFile.id")
     @Mapping(target = "slicingProperty", source = "slicingProperty")
     @Mapping(target = "materials", ignore = true)
     SlicingResultDto toDto(SlicingResult result);

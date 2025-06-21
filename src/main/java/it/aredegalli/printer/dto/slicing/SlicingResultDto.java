@@ -17,6 +17,7 @@ public class SlicingResultDto {
 
     private UUID id;
     private UUID sourceId;
+    private UUID generatedId;
     private long lines;
     private List<MaterialDto> materials;
     private SlicingPropertyDto slicingProperty;
