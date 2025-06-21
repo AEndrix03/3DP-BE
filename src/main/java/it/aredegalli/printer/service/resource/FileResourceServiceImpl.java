@@ -1,10 +1,10 @@
-package it.aredegalli.printer.service.slicing;
+package it.aredegalli.printer.service.resource;
 
 import it.aredegalli.printer.dto.storage.UploadResult;
 import it.aredegalli.printer.model.model.Model;
 import it.aredegalli.printer.model.resource.FileResource;
 import it.aredegalli.printer.repository.model.ModelRepository;
-import it.aredegalli.printer.repository.slicing.FileResourceRepository;
+import it.aredegalli.printer.repository.resource.FileResourceRepository;
 import it.aredegalli.printer.service.glb.StlGlbConvertService;
 import it.aredegalli.printer.service.storage.StorageService;
 import it.aredegalli.printer.util.PrinterCostants;

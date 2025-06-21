@@ -1,7 +1,7 @@
 package it.aredegalli.printer.controller.api;
 
 import it.aredegalli.printer.service.log.LogService;
-import it.aredegalli.printer.service.slicing.FileResourceService;
+import it.aredegalli.printer.service.resource.FileResourceService;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;

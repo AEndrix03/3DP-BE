@@ -32,12 +32,8 @@ public class SlicingResult {
     private FileResource generatedFile;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "slicing_profile_id", nullable = false)
-    private SlicingProfile slicingProfile;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "material_id", nullable = false)
-    private Material material;
+    @JoinColumn(name = "slicing_property_id", nullable = false)
+    private SlicingProperty slicingProperty;
 
     @Column(nullable = false)
     private long lines;

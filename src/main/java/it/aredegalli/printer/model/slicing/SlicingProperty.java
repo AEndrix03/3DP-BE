@@ -16,8 +16,8 @@ import java.time.Instant;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "slicing_profile")
-public class SlicingProfile {
+@Table(name = "slicing_property")
+public class SlicingProperty {
 
     @Id
     @Column(name = "id", nullable = false, updatable = false, length = 64)
@@ -28,12 +28,6 @@ public class SlicingProfile {
 
     @Column(name = "description", length = 512)
     private String description;
-
-    @Column(name = "slicer_id", nullable = false, length = 64)
-    private String slicerId;
-
-    @Column(name = "printer_id", nullable = false, length = 64)
-    private String printerId;
 
     @Column(name = "material_id", nullable = false, length = 64)
     private String materialId;

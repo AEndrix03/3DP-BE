@@ -11,14 +11,11 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class SlicingProfileDto {
+public class SlicingPropertyDto {
 
     private String id;
     private String name;
     private String description;
-    private String slicerId;
-    private String printerId;
-    private String materialId;
     private String layerHeightMm;
     private String firstLayerHeightMm;
     private String printSpeedMmS;

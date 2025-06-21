@@ -1,7 +1,7 @@
 package it.aredegalli.printer.mapper.slicing;
 
-import it.aredegalli.printer.dto.slicing.SlicingProfileDto;
-import it.aredegalli.printer.model.slicing.SlicingProfile;
+import it.aredegalli.printer.dto.slicing.SlicingPropertyDto;
+import it.aredegalli.printer.model.slicing.SlicingProperty;
 import org.mapstruct.Mapper;
 
 import java.util.List;
@@ -9,12 +9,12 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface SlicingProfileMapper {
 
-    SlicingProfileDto toDto(SlicingProfile slicingProfile);
+    SlicingPropertyDto toDto(SlicingProperty slicingProperty);
 
-    List<SlicingProfileDto> toDto(List<SlicingProfile> slicingProfiles);
+    List<SlicingPropertyDto> toDto(List<SlicingProperty> slicingProperties);
 
-    SlicingProfile toEntity(SlicingProfileDto slicingProfileDto);
+    SlicingProperty toEntity(SlicingPropertyDto slicingPropertyDto);
 
-    List<SlicingProfile> toEntity(List<SlicingProfileDto> slicingProfileDtos);
+    List<SlicingProperty> toEntity(List<SlicingPropertyDto> slicingPropertyDtos);
 
 }

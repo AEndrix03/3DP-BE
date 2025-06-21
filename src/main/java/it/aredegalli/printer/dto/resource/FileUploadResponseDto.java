@@ -1,4 +1,4 @@
-package it.aredegalli.printer.dto.slicing;
+package it.aredegalli.printer.dto.resource;
 
 import lombok.Builder;
 import lombok.Data;

@@ -12,8 +12,8 @@ public interface SlicingResultMapper {
 
     @Mapping(target = "id", source = "generatedFile.id")
     @Mapping(target = "sourceId", source = "sourceFile.id")
-    @Mapping(target = "slicingProfile", source = "slicingProfile")
-    @Mapping(target = "material", source = "material")
+    @Mapping(target = "slicingProperty", source = "slicingProperty")
+    @Mapping(target = "materials", ignore = true)
     SlicingResultDto toDto(SlicingResult result);
 
     List<SlicingResultDto> toDto(List<SlicingResult> results);

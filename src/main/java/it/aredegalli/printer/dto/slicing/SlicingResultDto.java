@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -17,8 +18,8 @@ public class SlicingResultDto {
     private UUID id;
     private UUID sourceId;
     private long lines;
-    private SlicingProfileDto slicingProfile;
-    private MaterialDto material;
+    private List<MaterialDto> materials;
+    private SlicingPropertyDto slicingProperty;
     private Instant createdAt;
 
 }
