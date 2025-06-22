@@ -68,4 +68,6 @@ public class Material {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "image")
+    private String image;
 }
