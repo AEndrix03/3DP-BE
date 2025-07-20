@@ -27,7 +27,7 @@ public class SlicingQueueProcessor {
             var queuedItems = slicingQueueRepository.findNextInQueue();
 
             // Count currently processing
-            long processingCount = slicingQueueRepository.countByStatus(SlicingStatus.PROCESSING);
+            long processingCount = slicingQueueRepository.countByStatus(SlicingStatus.PROCESSING.getCode());
 
             // Calculate how many we can process
             int availableSlots = (int) (maxConcurrentSlicing - processingCount);

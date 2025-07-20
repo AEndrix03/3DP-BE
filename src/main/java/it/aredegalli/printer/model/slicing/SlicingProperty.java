@@ -1,15 +1,13 @@
 package it.aredegalli.printer.model.slicing;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -20,8 +18,9 @@ import java.time.Instant;
 public class SlicingProperty {
 
     @Id
+    @GeneratedValue
     @Column(name = "id", nullable = false, updatable = false, length = 64)
-    private String id;
+    private UUID id;
 
     @Column(name = "name", nullable = false, length = 128)
     private String name;

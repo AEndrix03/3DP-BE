@@ -15,6 +15,7 @@ import java.util.UUID;
 @Table(name = "slicing_metrics")
 public class SlicingMetric {
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", nullable = false)
     private UUID id;
 

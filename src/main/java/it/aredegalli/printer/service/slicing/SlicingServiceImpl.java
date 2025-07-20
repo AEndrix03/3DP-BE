@@ -64,7 +64,7 @@ public class SlicingServiceImpl implements SlicingService {
     }
 
     // NEW METHODS
-    public UUID queueSlicing(UUID modelId, String slicingPropertyId, Integer priority) {
+    public UUID queueSlicing(UUID modelId, UUID slicingPropertyId, Integer priority) {
         log.info("SlicingServiceImpl", "Queueing slicing for model: " + modelId);
 
         Model model = modelRepository.findById(modelId)
@@ -76,7 +76,7 @@ public class SlicingServiceImpl implements SlicingService {
                 .model(model)
                 .slicingProperty(property)
                 .priority(priority != null ? priority : 5)
-                .status(String.valueOf(SlicingStatus.QUEUED))
+                .status(SlicingStatus.QUEUED.getCode())
                 .createdAt(Instant.now())
                 .progressPercentage(0)
                 .build();
@@ -101,7 +101,7 @@ public class SlicingServiceImpl implements SlicingService {
 
         try {
             // Update status to processing
-            queue.setStatus(String.valueOf(SlicingStatus.PROCESSING));
+            queue.setStatus(SlicingStatus.PROCESSING.getCode());
             queue.setStartedAt(Instant.now());
             queue.setProgressPercentage(0);
             slicingQueueRepository.save(queue);
@@ -114,7 +114,7 @@ public class SlicingServiceImpl implements SlicingService {
             slicingQueueRepository.save(queue);
 
             // Mark as completed
-            queue.setStatus(String.valueOf(SlicingStatus.COMPLETED));
+            queue.setStatus(SlicingStatus.COMPLETED.getCode());
             queue.setCompletedAt(Instant.now());
             queue.setProgressPercentage(100);
             slicingQueueRepository.save(queue);
@@ -124,14 +124,15 @@ public class SlicingServiceImpl implements SlicingService {
         } catch (Exception e) {
             log.error("SlicingServiceImpl", "Slicing failed for queue: " + queueId + " - " + e.getMessage());
 
-            queue.setStatus(String.valueOf(SlicingStatus.FAILED));
+            queue.setStatus(SlicingStatus.FAILED.getCode());
             queue.setErrorMessage(e.getMessage());
             queue.setCompletedAt(Instant.now());
             slicingQueueRepository.save(queue);
         }
     }
 
-    private SlicingProperty findSlicingPropertyById(String id) {
+    //TODO
+    private SlicingProperty findSlicingPropertyById(UUID id) {
         // Implementation to find SlicingProperty by ID from existing system
         // This would need existing SlicingProperty repository access
         return SlicingProperty.builder()

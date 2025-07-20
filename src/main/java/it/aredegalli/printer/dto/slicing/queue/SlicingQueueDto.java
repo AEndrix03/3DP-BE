@@ -17,7 +17,7 @@ public class SlicingQueueDto {
 
     private UUID id;
     private UUID modelId;
-    private String slicingPropertyId;
+    private UUID slicingPropertyId;
     private Integer priority;
     private SlicingStatus status;
     private Instant createdAt;

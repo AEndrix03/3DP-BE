@@ -3,19 +3,20 @@ package it.aredegalli.printer.repository.slicing;
 import it.aredegalli.printer.enums.slicing.SlicingStatus;
 import it.aredegalli.printer.model.slicing.SlicingQueue;
 import it.aredegalli.printer.repository.UUIDRepository;
-import org.springframework.data.jpa.repository.Query;
+import jakarta.validation.constraints.Size;
 
 import java.util.List;
 import java.util.UUID;
 
 public interface SlicingQueueRepository extends UUIDRepository<SlicingQueue> {
 
-    List<SlicingQueue> findByStatusOrderByPriorityDescCreatedAtAsc(SlicingStatus status);
+    List<SlicingQueue> findByStatusOrderByPriorityDescCreatedAtAsc(@Size(max = 20) String status);
 
     List<SlicingQueue> findByModelId(UUID modelId);
 
-    @Query("SELECT sq FROM SlicingQueue sq WHERE sq.status = 'QUEUED' ORDER BY sq.priority DESC, sq.createdAt ASC")
-    List<SlicingQueue> findNextInQueue();
+    default List<SlicingQueue> findNextInQueue() {
+        return findByStatusOrderByPriorityDescCreatedAtAsc((SlicingStatus.QUEUED).getCode());
+    }
 
-    long countByStatus(SlicingStatus status);
+    long countByStatus(@Size(max = 20) String status);
 }

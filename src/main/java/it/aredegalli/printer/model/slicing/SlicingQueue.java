@@ -18,6 +18,7 @@ import java.util.UUID;
 @Table(name = "slicing_queue")
 public class SlicingQueue {
     @Id
+    @GeneratedValue
     @Column(name = "id", nullable = false)
     private UUID id;
 
