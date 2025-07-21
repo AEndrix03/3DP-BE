@@ -14,12 +14,16 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "slicing_property")
+@Table(name = "slicing_property", indexes = {
+        @Index(name = "idx_slicing_property_name", columnList = "name"),
+        @Index(name = "idx_slicing_property_material", columnList = "material_id"),
+        @Index(name = "idx_slicing_property_user", columnList = "created_by_user_id")
+})
 public class SlicingProperty {
 
     @Id
     @GeneratedValue
-    @Column(name = "id", nullable = false, updatable = false, length = 64)
+    @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
     @Column(name = "name", nullable = false, length = 128)
@@ -28,8 +32,14 @@ public class SlicingProperty {
     @Column(name = "description", length = 512)
     private String description;
 
-    @Column(name = "material_id", nullable = false, length = 64)
-    private String materialId;
+    // Fixed: Changed to UUID to match Material entity
+    @Column(name = "material_id", nullable = false)
+    private UUID materialId;
+
+    // Optional: Add direct relationship if needed
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "material_id", insertable = false, updatable = false)
+    private Material material;
 
     @Column(name = "layer_height_mm", length = 16)
     private String layerHeightMm;
@@ -94,4 +104,16 @@ public class SlicingProperty {
     @Column(name = "is_public", length = 8)
     private String isPublic;
 
+    // Auto-set timestamps
+    @PrePersist
+    public void prePersist() {
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = Instant.now();
+    }
 }

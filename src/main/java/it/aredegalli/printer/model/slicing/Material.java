@@ -1,9 +1,6 @@
 package it.aredegalli.printer.model.slicing;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,12 +13,18 @@ import java.time.Instant;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "material")
+@Table(name = "material", indexes = {
+        @Index(name = "idx_material_name", columnList = "name"),
+        @Index(name = "idx_material_type", columnList = "type"),
+        @Index(name = "idx_material_brand", columnList = "brand")
+})
 public class Material {
 
+    // Changed to UUID for consistency with other entities
     @Id
-    @Column(name = "id", nullable = false, updatable = false, length = 64)
-    private String id;
+    @GeneratedValue(generator = "UUID")
+    @Column(name = "id", nullable = false, updatable = false)
+    private java.util.UUID id;
 
     @Column(name = "name", nullable = false, length = 128)
     private String name;
@@ -70,4 +73,17 @@ public class Material {
 
     @Column(name = "image")
     private String image;
+
+    // Auto-set timestamps
+    @PrePersist
+    public void prePersist() {
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = Instant.now();
+    }
 }

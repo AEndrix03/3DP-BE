@@ -42,8 +42,9 @@ public class SlicingContainer {
     @Column(name = "port", nullable = false)
     private Integer port;
 
-    @Enumerated(EnumType.STRING)
+    // Fixed enum mapping with custom converter
     @Column(name = "status", length = 50)
+    @Convert(converter = ContainerStatus.ContainerStatusConverter.class)
     @Builder.Default
     private ContainerStatus status = ContainerStatus.UNKNOWN;
 
@@ -71,7 +72,7 @@ public class SlicingContainer {
     @Column(name = "memory_limit_mb")
     private Integer memoryLimitMb;
 
-    @Column(name = "cpu_limit")
+    @Column(name = "cpu_limit", precision = 5, scale = 2)  // Fixed precision for double
     private Double cpuLimit;
 
     @Column(name = "disk_space_mb")
@@ -119,5 +120,11 @@ public class SlicingContainer {
     public double getLoadPercentage() {
         return maxConcurrentJobs > 0 ?
                 (double) currentActiveJobs / maxConcurrentJobs * 100 : 0;
+    }
+
+    // Update timestamp on entity changes
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = Instant.now();
     }
 }

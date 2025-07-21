@@ -6,6 +6,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -15,7 +17,11 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "model")
+@Table(name = "model", indexes = {
+        @Index(name = "idx_model_name", columnList = "name"),
+        @Index(name = "idx_model_active", columnList = "active"),
+        @Index(name = "idx_model_created_at", columnList = "created_at")
+})
 public class Model {
 
     @Id
@@ -29,17 +35,37 @@ public class Model {
     @Column(name = "description", length = 512)
     private String description;
 
-    @Column(name = "created_at", nullable = false)
+    // Fixed: Use Hibernate annotations for automatic timestamp handling
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    @Column(name = "updated_at", nullable = false, columnDefinition = "TIMESTAMPTZ DEFAULT now()")
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     @Column(name = "active")
     @Builder.Default
     private boolean active = true;
 
-    @OneToOne
-    @JoinColumn(referencedColumnName = "id", nullable = false)
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.REFRESH)
+    @JoinColumn(name = "file_resource_id", referencedColumnName = "id", nullable = false)
     private FileResource fileResource;
+
+    // Manual timestamp management if needed
+    @PrePersist
+    public void prePersist() {
+        Instant now = Instant.now();
+        if (this.createdAt == null) {
+            this.createdAt = now;
+        }
+        if (this.updatedAt == null) {
+            this.updatedAt = now;
+        }
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = Instant.now();
+    }
 }

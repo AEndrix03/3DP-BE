@@ -1,6 +1,7 @@
 package it.aredegalli.printer.model.slicing;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Digits;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -14,6 +15,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @Table(name = "slicing_metrics")
 public class SlicingMetric {
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", nullable = false)
@@ -29,19 +31,22 @@ public class SlicingMetric {
     @Column(name = "estimated_print_time_minutes")
     private Integer estimatedPrintTimeMinutes;
 
-    @Column(name = "material_volume_mm3", precision = 10, scale = 2)
+    @Digits(integer = 8, fraction = 2)
+    @Column(name = "material_volume_mm3", columnDefinition = "DECIMAL(10,2)")
     private BigDecimal materialVolumeMm3;
 
-    @Column(name = "material_weight_g", precision = 8, scale = 2)
+    @Digits(integer = 6, fraction = 2)
+    @Column(name = "material_weight_g", columnDefinition = "DECIMAL(8,2)")
     private BigDecimal materialWeightG;
 
-    @Column(name = "estimated_cost", precision = 8, scale = 2)
+    @Digits(integer = 6, fraction = 2)
+    @Column(name = "estimated_cost", columnDefinition = "DECIMAL(8,2)")
     private BigDecimal estimatedCost;
 
     @Column(name = "layer_count")
     private Integer layerCount;
 
-    @Column(name = "support_volume_mm3", precision = 10, scale = 2)
+    @Digits(integer = 8, fraction = 2)
+    @Column(name = "support_volume_mm3", columnDefinition = "DECIMAL(10,2)")
     private BigDecimal supportVolumeMm3;
-
 }

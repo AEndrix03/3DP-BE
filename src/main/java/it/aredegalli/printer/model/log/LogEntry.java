@@ -17,7 +17,11 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "log_entry")
+@Table(name = "log_entry", indexes = {
+        @Index(name = "idx_log_entry_timestamp", columnList = "timestamp"),
+        @Index(name = "idx_log_entry_logger", columnList = "logger"),
+        @Index(name = "idx_log_entry_level", columnList = "level")
+})
 public class LogEntry {
 
     @Id
@@ -25,16 +29,29 @@ public class LogEntry {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
+    @Column(name = "timestamp", nullable = false)
     private Instant timestamp;
 
-    @ManyToOne
-    @JoinColumn(name = "level")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "level", nullable = false)
     private LogLevel level;
 
+    @Column(name = "logger", nullable = false, length = 100)
     private String logger;
+
+    // Fixed: Use TEXT instead of VARCHAR to avoid length limitations
+    @Column(name = "message", nullable = false, columnDefinition = "TEXT")
     private String message;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
+    @Column(name = "context", columnDefinition = "jsonb")
     private Map<String, Object> context;
+
+    // Auto-set timestamp on creation
+    @PrePersist
+    public void prePersist() {
+        if (this.timestamp == null) {
+            this.timestamp = Instant.now();
+        }
+    }
 }
