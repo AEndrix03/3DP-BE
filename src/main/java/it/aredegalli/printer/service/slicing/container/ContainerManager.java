@@ -5,6 +5,7 @@ import it.aredegalli.printer.model.model.Model;
 import it.aredegalli.printer.model.resource.FileResource;
 import it.aredegalli.printer.model.slicing.*;
 import it.aredegalli.printer.repository.resource.FileResourceRepository;
+import it.aredegalli.printer.repository.slicing.SlicingContainerRepository;
 import it.aredegalli.printer.repository.slicing.SlicingJobAssignmentRepository;
 import it.aredegalli.printer.repository.slicing.SlicingResultRepository;
 import it.aredegalli.printer.service.log.LogService;
