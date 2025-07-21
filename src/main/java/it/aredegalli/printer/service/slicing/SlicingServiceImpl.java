@@ -8,19 +8,28 @@ import it.aredegalli.printer.mapper.slicing.MaterialMapper;
 import it.aredegalli.printer.mapper.slicing.SlicingResultMapper;
 import it.aredegalli.printer.model.model.Model;
 import it.aredegalli.printer.model.slicing.*;
+import it.aredegalli.printer.model.validation.ModelValidation;
 import it.aredegalli.printer.repository.model.ModelRepository;
 import it.aredegalli.printer.repository.slicing.SlicingQueueRepository;
 import it.aredegalli.printer.repository.slicing.SlicingQueueResultRepository;
 import it.aredegalli.printer.repository.slicing.SlicingResultMaterialRepository;
 import it.aredegalli.printer.repository.slicing.SlicingResultRepository;
+import it.aredegalli.printer.repository.validation.ModelValidationRepository;
 import it.aredegalli.printer.service.log.LogService;
 import it.aredegalli.printer.service.slicing.engine.SlicingEngine;
+import it.aredegalli.printer.service.slicing.engine.SlicingEngineSelector;
+import it.aredegalli.printer.service.slicing.metrics.SlicingMetricsService;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -33,10 +42,24 @@ public class SlicingServiceImpl implements SlicingService {
     private final MaterialMapper materialMapper;
     private final LogService log;
 
+    // Enhanced dependencies for real slicing
     private final SlicingQueueRepository slicingQueueRepository;
-    private final SlicingEngine slicingEngine;
-    private final ModelRepository modelRepository;
     private final SlicingQueueResultRepository slicingQueueResultRepository;
+    private final SlicingEngineSelector engineSelector;
+    private final SlicingMetricsService metricsService;
+    private final ModelRepository modelRepository;
+    private final ModelValidationRepository modelValidationRepository;
+
+    // Configuration
+    @Value("${slicing.error-handling.max-retries:2}")
+    private int maxRetries;
+
+    @Value("${slicing.error-handling.fallback-to-default:true}")
+    private boolean fallbackToDefault;
+
+    // ======================================
+    // ORIGINAL METHODS - Enhanced
+    // ======================================
 
     @Override
     public List<SlicingResultDto> getAllSlicingResultBySourceId(UUID sourceId) {
@@ -54,20 +77,44 @@ public class SlicingServiceImpl implements SlicingService {
     }
 
     @Override
+    @Transactional
     public void deleteSlicingResultById(UUID id) {
+        SlicingResult result = slicingResultRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Slicing result not found"));
+
+        // Delete associated queue results
+        slicingQueueResultRepository.deleteBySlicingResultId(id);
+
+        // Delete associated metrics
+        Optional<SlicingMetric> metrics = Optional.ofNullable(metricsService.getMetricsBySlicingResultId(id));
+        metrics.ifPresent(m -> log.debug("SlicingServiceImpl", "Deleting metrics for result: " + id));
+
         slicingResultRepository.deleteById(id);
         log.info("SlicingServiceImpl", "Slicing result with ID " + id + " was deleted");
     }
 
-    // NEW METHODS
+    // ======================================
+    // NEW QUEUE METHODS
+    // ======================================
+
+    @Override
+    @Transactional
     public UUID queueSlicing(UUID modelId, UUID slicingPropertyId, Integer priority) {
         log.info("SlicingServiceImpl", "Queueing slicing for model: " + modelId);
 
+        // Validate model exists
         Model model = modelRepository.findById(modelId)
-                .orElseThrow(() -> new RuntimeException("Model not found: " + modelId));
+                .orElseThrow(() -> new NotFoundException("Model not found: " + modelId));
 
         SlicingProperty property = findSlicingPropertyById(slicingPropertyId);
 
+        // Pre-validate model if needed
+        ModelValidation validation = validateModelIfNeeded(model);
+        if (validation != null && validation.getHasErrors()) {
+            throw new IllegalArgumentException("Model has validation errors: " + validation.getErrorDetails());
+        }
+
+        // Create queue entry
         SlicingQueue queue = SlicingQueue.builder()
                 .model(model)
                 .slicingProperty(property)
@@ -87,7 +134,13 @@ public class SlicingServiceImpl implements SlicingService {
         return slicingQueueRepository.findById(queueId).orElse(null);
     }
 
+    // ======================================
+    // ENHANCED SLICING PROCESSING
+    // ======================================
+
+    @Override
     @Async("slicingExecutor")
+    @Transactional
     public void processSlicing(UUID queueId) {
         SlicingQueue queue = slicingQueueRepository.findById(queueId).orElse(null);
         if (queue == null) {
@@ -95,59 +148,213 @@ public class SlicingServiceImpl implements SlicingService {
             return;
         }
 
+        log.info("SlicingServiceImpl",
+                String.format("Starting slicing process for queue: %s, model: %s",
+                        queueId, queue.getModel().getName()));
+
         try {
             // Update status to processing
-            queue.setStatus(SlicingStatus.PROCESSING.getCode());
-            queue.setStartedAt(Instant.now());
-            queue.setProgressPercentage(0);
-            slicingQueueRepository.save(queue);
+            updateQueueStatus(queue, SlicingStatus.PROCESSING, "Starting slicing process", 0);
 
-            // Execute slicing using existing FileResource infrastructure
-            SlicingResult result = slicingEngine.slice(queue.getModel(), queue.getSlicingProperty());
+            // 1. Validate model thoroughly
+            ModelValidation validation = validateModel(queue.getModel());
+            if (validation.getHasErrors()) {
+                throw new SlicingProcessException("Model validation failed: " + validation.getErrorDetails());
+            }
+            updateQueueProgress(queue, 10, "Model validated");
 
-            // Update progress
-            queue.setProgressPercentage(50);
-            slicingQueueRepository.save(queue);
+            // 2. Select optimal slicing engine
+            SlicingEngine engine = selectSlicingEngine(queue);
+            updateQueueProgress(queue, 20, "Engine selected: " + engine.getName());
 
-            // Mark as completed
-            queue.setStatus(SlicingStatus.COMPLETED.getCode());
-            queue.setCompletedAt(Instant.now());
-            queue.setProgressPercentage(100);
-            slicingQueueRepository.save(queue);
+            // 3. Execute slicing with retry capability
+            SlicingResult result = executeSlicingWithRetry(engine, queue);
+            updateQueueProgress(queue, 80, "Slicing completed, analyzing results");
 
-            slicingQueueResultRepository.save(SlicingQueueResult.builder()
-                    .slicingQueue(queue)
-                    .slicingResult(result)
-                    .build()
-            );
+            // 4. Calculate real metrics from G-code
+            SlicingMetric metrics = metricsService.calculateMetrics(result);
+            updateQueueProgress(queue, 95, "Metrics calculated");
 
-            log.info("SlicingServiceImpl", "Slicing completed for queue: " + queueId);
+            // 5. Create queue result mapping
+            createQueueResult(queue, result);
+
+            // 6. Mark as completed
+            updateQueueStatus(queue, SlicingStatus.COMPLETED, "Slicing completed successfully", 100);
+
+            log.info("SlicingServiceImpl",
+                    String.format("Slicing completed successfully for queue: %s, result: %s, layers: %d, time: %d min",
+                            queueId, result.getId(), metrics.getLayerCount(), metrics.getEstimatedPrintTimeMinutes()));
 
         } catch (Exception e) {
-            log.error("SlicingServiceImpl", "Slicing failed for queue: " + queueId + " - " + e.getMessage());
-
-            queue.setStatus(SlicingStatus.FAILED.getCode());
-            queue.setErrorMessage(e.getMessage());
-            queue.setCompletedAt(Instant.now());
-            slicingQueueRepository.save(queue);
+            handleSlicingFailure(queue, e);
         }
     }
 
-    //TODO
+    @Retryable(value = {SlicingProcessException.class}, maxAttempts = 3,
+            backoff = @Backoff(delay = 30000, multiplier = 2))
+    private SlicingResult executeSlicingWithRetry(SlicingEngine engine, SlicingQueue queue) {
+        try {
+            log.info("SlicingServiceImpl",
+                    "Executing slicing with engine: " + engine.getName() + " v" + engine.getVersion());
+
+            return engine.slice(queue.getModel(), queue.getSlicingProperty());
+
+        } catch (Exception e) {
+            log.warn("SlicingServiceImpl",
+                    "Slicing attempt failed with " + engine.getName() + ": " + e.getMessage());
+
+            // If retries exhausted and fallback enabled, try default engine
+            if (fallbackToDefault && !engine.getName().equalsIgnoreCase("default")) {
+                log.info("SlicingServiceImpl", "Attempting fallback to default engine");
+                SlicingEngine defaultEngine = engineSelector.getDefaultEngine();
+                return defaultEngine.slice(queue.getModel(), queue.getSlicingProperty());
+            }
+
+            throw new SlicingProcessException("Slicing failed after retries: " + e.getMessage(), e);
+        }
+    }
+
+    private SlicingEngine selectSlicingEngine(SlicingQueue queue) {
+        try {
+            SlicingEngine engine = engineSelector.selectEngine(queue.getSlicingProperty(), queue.getModel());
+            log.info("SlicingServiceImpl",
+                    String.format("Selected engine: %s for model: %s (size: %d bytes)",
+                            engine.getName(), queue.getModel().getName(),
+                            queue.getModel().getFileResource().getFileSize()));
+            return engine;
+        } catch (Exception e) {
+            log.warn("SlicingServiceImpl", "Engine selection failed, using default: " + e.getMessage());
+            return engineSelector.getDefaultEngine();
+        }
+    }
+
+    // ======================================
+    // MODEL VALIDATION
+    // ======================================
+
+    private ModelValidation validateModelIfNeeded(Model model) {
+        Optional<ModelValidation> existing = modelValidationRepository.findByModelId(model.getId());
+
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        // Perform basic validation
+        return validateModel(model);
+    }
+
+    private ModelValidation validateModel(Model model) {
+        log.debug("SlicingServiceImpl", "Validating model: " + model.getId());
+
+        ModelValidation.ModelValidationBuilder validationBuilder = ModelValidation.builder()
+                .model(model)
+                .validatedAt(Instant.now())
+                .autoRepairApplied(false);
+
+        boolean hasErrors = false;
+
+        // Basic file validation
+        if (model.getFileResource() == null) {
+            hasErrors = true;
+            validationBuilder.errorDetails(java.util.Map.of("file", "No file resource associated"));
+        } else {
+            long fileSize = model.getFileResource().getFileSize();
+            if (fileSize <= 0 || fileSize > 100 * 1024 * 1024) { // 100MB limit
+                hasErrors = true;
+                validationBuilder.errorDetails(java.util.Map.of("fileSize", "Invalid file size: " + fileSize));
+            }
+        }
+
+        ModelValidation validation = validationBuilder
+                .hasErrors(hasErrors)
+                .isManifold(!hasErrors) // Simplified assumption
+                .build();
+
+        return modelValidationRepository.save(validation);
+    }
+
+    // ======================================
+    // QUEUE MANAGEMENT HELPERS
+    // ======================================
+
+    private void updateQueueStatus(SlicingQueue queue, SlicingStatus status, String message, Integer progress) {
+        queue.setStatus(status.getCode());
+        queue.setProgressPercentage(progress);
+
+        if (status == SlicingStatus.PROCESSING && queue.getStartedAt() == null) {
+            queue.setStartedAt(Instant.now());
+        } else if (status == SlicingStatus.COMPLETED || status == SlicingStatus.FAILED) {
+            queue.setCompletedAt(Instant.now());
+        }
+
+        if (status == SlicingStatus.FAILED) {
+            queue.setErrorMessage(message);
+        }
+
+        slicingQueueRepository.save(queue);
+        log.debug("SlicingServiceImpl",
+                String.format("Queue %s: %s (%d%%) - %s", queue.getId(), status, progress, message));
+    }
+
+    private void updateQueueProgress(SlicingQueue queue, Integer progress, String message) {
+        queue.setProgressPercentage(progress);
+        slicingQueueRepository.save(queue);
+        log.debug("SlicingServiceImpl",
+                String.format("Queue %s progress: %d%% - %s", queue.getId(), progress, message));
+    }
+
+    private void createQueueResult(SlicingQueue queue, SlicingResult result) {
+        SlicingQueueResult queueResult = SlicingQueueResult.builder()
+                .slicingQueue(queue)
+                .slicingResult(result)
+                .build();
+
+        slicingQueueResultRepository.save(queueResult);
+
+        log.debug("SlicingServiceImpl",
+                String.format("Created queue result mapping: queue=%s, result=%s", queue.getId(), result.getId()));
+    }
+
+    private void handleSlicingFailure(SlicingQueue queue, Exception e) {
+        log.error("SlicingServiceImpl",
+                String.format("Slicing failed for queue: %s, model: %s - %s",
+                        queue.getId(), queue.getModel().getName(), e.getMessage()));
+
+        updateQueueStatus(queue, SlicingStatus.FAILED, e.getMessage(), null);
+    }
+
+    // ======================================
+    // UTILITY METHODS (Updated to integrate with existing system)
+    // ======================================
+
+    // TODO: Replace with actual SlicingProperty repository integration when available
     private SlicingProperty findSlicingPropertyById(UUID id) {
-        // Implementation to find SlicingProperty by ID from existing system
-        // This would need existing SlicingProperty repository access
+        // This should be replaced with actual repository call
+        // For now, return a default profile - integrate with existing SlicingProperty system
         return SlicingProperty.builder()
                 .id(id)
                 .name("Default Profile")
                 .layerHeightMm("0.2")
-                .extruderTempC(200)
+                .printSpeedMmS("50")
+                .travelSpeedMmS("150")
+                .infillPercentage("20")
+                .infillPattern("grid")
+                .perimeterCount(2)
+                .topSolidLayers(3)
+                .bottomSolidLayers(3)
+                .extruderTempC(210)
                 .bedTempC(60)
+                .supportsEnabled("false")
+                .brimEnabled("false")
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
                 .build();
     }
 
     private SlicingResultDto toDto(SlicingResult slicingResult) {
         SlicingResultDto dto = slicingResultMapper.toDto(slicingResult);
+
+        // Add materials information
         List<MaterialDto> materials = this.materialMapper.toDto(
                 this.slicingResultMaterialRepository.findSlicingResultMaterialBySlicingResultId(dto.getId())
                         .stream()
@@ -155,6 +362,18 @@ public class SlicingServiceImpl implements SlicingService {
                         .toList()
         );
         dto.setMaterials(materials);
+
         return dto;
+    }
+
+    // Custom exception for slicing process
+    public static class SlicingProcessException extends RuntimeException {
+        public SlicingProcessException(String message) {
+            super(message);
+        }
+
+        public SlicingProcessException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 }

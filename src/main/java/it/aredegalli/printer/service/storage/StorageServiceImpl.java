@@ -1,7 +1,6 @@
-package it.aredegalli.printer.service.slicing;
+package it.aredegalli.printer.service.storage;
 
 import it.aredegalli.printer.dto.storage.UploadResult;
-import it.aredegalli.printer.service.storage.StorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.sync.RequestBody;

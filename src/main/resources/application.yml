@@ -1,3 +1,4 @@
+# application.yml - Enhanced with Slicing Engine Configuration
 spring:
   application:
     name: 3D Printer BE
@@ -14,6 +15,9 @@ spring:
     password: ${PRINTER_DB_PASSWORD}
     hikari:
       maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 20000
+      idle-timeout: 300000
 
   jpa:
     hibernate:
@@ -23,6 +27,12 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 20
+          order_inserts: true
+          order_updates: true
+        cache:
+          use_second_level_cache: false
 
   devtools:
     restart:
@@ -38,8 +48,10 @@ spring:
         core-size: 2
         max-size: 5
         queue-capacity: 10
+        thread-name-prefix: "printer-async-"
+        keep-alive: "60s"
 
-# SSL Config (HTTPS enabled with keystore)
+# SSL Configuration (HTTPS enabled with keystore)
 server:
   address: 0.0.0.0
   port: 8443
@@ -48,9 +60,12 @@ server:
     key-store: classpath:keystore.p12
     key-store-password: ${PRINTER_KEYSTORE_PASSWORD}
     key-store-type: PKCS12
+  compression:
+    enabled: true
+  http2:
+    enabled: true
 
-
-# Logging
+# Logging Configuration
 logging:
   level:
     root: WARN
@@ -59,58 +74,375 @@ logging:
     org.hibernate.type.descriptor.sql: TRACE
     it.aredegalli: DEBUG
     org.springframework.web: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
-# CORS Configuration (can be restricted per environment)
+# CORS Configuration
 security:
   cors:
     allowed-origins: "*"
     allowed-methods: "*"
     allowed-headers: "*"
+    allow-credentials: false
+    max-age: 3600
   whitelist:
-    ips: ${PRINTER_WHITELIST_IPS}
+    ips: ${PRINTER_WHITELIST_IPS:127.0.0.1,::1}
 
-# AES Encryption Key for sensitive data
-security.crypto:
-  aes-secret-key: ${PRINTER_AES_KEY}
+  # AES Encryption Key for sensitive data
+  crypto:
+    aes-secret-key: ${PRINTER_AES_KEY}
 
 # Actuator Configuration
 management:
   endpoints:
     web:
       exposure:
-        include: health, info, beans
+        include: health, info, beans, metrics, env
       base-path: /actuator
   endpoint:
     health:
       show-details: always
+      show-components: always
   info:
     git:
       mode: full
+    env:
+      enabled: true
+  health:
+    db:
+      enabled: true
+    diskspace:
+      enabled: true
 
-# Swagger OpenAPI
+# Swagger OpenAPI Configuration
 springdoc:
   api-docs:
     enabled: true
     path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
+    enabled: true
+    operationsSorter: method
+    tagsSorter: alpha
+  show-actuator: true
 
-# HMAC
+# HMAC Configuration
 hmac:
   secret:
     key: ${HMAC_SECRET_KEY}
 
+# MinIO/S3 Storage Configuration
 minio:
   endpoint: ${MINIO_ENDPOINT}
   access-key: ${MINIO_ACCESS_KEY}
   secret-key: ${MINIO_SECRET_KEY}
-  port: ${MINIO_PORT}
-  region: us-east-1
+  port: ${MINIO_PORT:9000}
+  region: ${MINIO_REGION:us-east-1}
+  bucket-name: ${MINIO_BUCKET_NAME:3d-printer-files}
 
+# External Services Configuration
+external-services:
+  stl2glb:
+    url: ${STL2GLB_SERVICE_URL:http://dev.aredegalli.it:9002}
+    timeout: 30s
+    retry-attempts: 3
+
+# Legacy compatibility for Feign clients
 stl2glb:
-  url: http://dev.aredegalli.it:9002
+  url: ${STL2GLB_SERVICE_URL:http://dev.aredegalli.it:9002}
 
+# ======================================
+# SLICING ENGINE CONFIGURATION
+# ======================================
 slicing:
-  max-concurrent: 3
-  timeout-minutes: 30
-  temp-directory: /tmp/slicing
+  # General slicing settings
+  max-concurrent: ${SLICING_MAX_CONCURRENT:3}
+  timeout-minutes: ${SLICING_TIMEOUT_MINUTES:30}
+  temp-directory: ${SLICING_TEMP_DIR:/tmp/slicing}
+  default-engine: ${SLICING_DEFAULT_ENGINE:prusa}
+
+  # Engine selection configuration
+  engine-selection:
+    enabled: true
+    auto-select-by-complexity: true
+    auto-select-by-quality: true
+    fallback-engine: default
+
+  # Individual engine configurations
+  engines:
+    # PrusaSlicer Configuration
+    prusa:
+      enabled: ${SLICING_PRUSA_ENABLED:true}
+      binary-path: ${PRUSA_SLICER_PATH:/usr/bin/prusa-slicer}
+      config-template-path: ${PRUSA_CONFIG_PATH:/app/config/prusa-templates}
+      timeout-seconds: 300
+      max-memory-mb: 2048
+      priority: 1  # Higher priority for complex jobs
+      supported-formats: [ "stl", "obj", "3mf" ]
+
+    # Cura Engine Configuration
+    cura:
+      enabled: ${SLICING_CURA_ENABLED:false}
+      binary-path: ${CURA_ENGINE_PATH:/usr/bin/CuraEngine}
+      config-template-path: ${CURA_CONFIG_PATH:/app/config/cura-templates}
+      timeout-seconds: 240
+      max-memory-mb: 1536
+      priority: 2
+      supported-formats: [ "stl", "obj", "3mf" ]
+
+    # Default/Fallback Engine
+    default:
+      enabled: true
+      timeout-seconds: 60
+      priority: 99  # Lowest priority
+      supported-formats: [ "stl" ]
+
+    # External Slicing Service (optional)
+    external:
+      enabled: ${SLICING_EXTERNAL_ENABLED:false}
+      service-url: ${EXTERNAL_SLICER_URL:http://slicer-service:8080}
+      api-key: ${EXTERNAL_SLICER_API_KEY:}
+      timeout-seconds: 600
+      priority: 3
+      supported-formats: [ "stl", "obj", "3mf", "ply" ]
+
+  # Quality profiles mapping
+  quality-profiles:
+    draft:
+      layer-height: 0.3
+      speed-multiplier: 1.5
+      infill-density: 10
+      print-speed: 80
+    standard:
+      layer-height: 0.2
+      speed-multiplier: 1.0
+      infill-density: 20
+      print-speed: 60
+    high:
+      layer-height: 0.15
+      speed-multiplier: 0.8
+      infill-density: 25
+      print-speed: 50
+    ultra:
+      layer-height: 0.1
+      speed-multiplier: 0.6
+      infill-density: 30
+      print-speed: 40
+
+  # Material settings
+  materials:
+    pla:
+      density-g-cm3: 1.25
+      cost-per-kg: 25.0
+      default-extruder-temp: 210
+      default-bed-temp: 60
+      supports-heated-bed: false
+    abs:
+      density-g-cm3: 1.04
+      cost-per-kg: 28.0
+      default-extruder-temp: 250
+      default-bed-temp: 80
+      supports-heated-bed: true
+    petg:
+      density-g-cm3: 1.27
+      cost-per-kg: 32.0
+      default-extruder-temp: 230
+      default-bed-temp: 70
+      supports-heated-bed: true
+    tpu:
+      density-g-cm3: 1.20
+      cost-per-kg: 45.0
+      default-extruder-temp: 220
+      default-bed-temp: 50
+      supports-heated-bed: false
+
+  # Performance and monitoring
+  monitoring:
+    enabled: true
+    metrics-collection: true
+    performance-logging: true
+    export-metrics: true
+
+  # Error handling and retry configuration
+  error-handling:
+    max-retries: 2
+    retry-delay-seconds: 30
+    fallback-to-default: true
+    log-failed-attempts: true
+
+  # Cleanup configuration
+  cleanup:
+    temp-files-retention-hours: 24
+    failed-job-retention-days: 7
+    auto-cleanup-enabled: true
+    cleanup-schedule: "0 0 2 * * ?" # Daily at 2 AM
+
+# ======================================
+# PRINTER SPECIFIC CONFIGURATIONS
+# ======================================
+printer:
+  # Default printer specifications for slicing
+  default-specs:
+    build-volume-x: 200
+    build-volume-y: 200
+    build-volume-z: 200
+    nozzle-diameter: 0.4
+    max-layer-height: 0.3
+    min-layer-height: 0.05
+    max-print-speed: 100
+    heated-bed: true
+
+  # Printer profiles for automatic configuration
+  profiles:
+    prusa-mk3s:
+      build-volume: [ 250, 210, 210 ]
+      nozzle-diameter: 0.4
+      supports-auto-leveling: true
+      recommended-engines: [ "prusa" ]
+      max-print-speed: 200
+      heated-bed: true
+
+    ender3:
+      build-volume: [ 220, 220, 250 ]
+      nozzle-diameter: 0.4
+      supports-auto-leveling: false
+      recommended-engines: [ "cura", "prusa" ]
+      max-print-speed: 120
+      heated-bed: true
+
+    ultimaker:
+      build-volume: [ 223, 223, 205 ]
+      nozzle-diameter: 0.4
+      supports-auto-leveling: true
+      recommended-engines: [ "cura" ]
+      max-print-speed: 150
+      heated-bed: true
+
+# ======================================
+# ENVIRONMENT SPECIFIC OVERRIDES
+# ======================================
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: development
+
+  # Override datasource for development
+  datasource:
+    url: jdbc:postgresql://localhost:5432/printer_dev
+    username: ${PRINTER_DB_USERNAME:printer_dev}
+    password: ${PRINTER_DB_PASSWORD:dev_password}
+
+# Development specific slicing configuration
+slicing:
+  max-concurrent: 2  # Limit concurrent jobs in development
+  engines:
+    prusa:
+      binary-path: ${PRUSA_SLICER_PATH:/usr/local/bin/prusa-slicer}
+      timeout-seconds: 600  # Longer timeout for development
+    cura:
+      enabled: false  # Disable Cura in development
+
+# Enhanced logging for development
+logging:
+  level:
+    it.aredegalli.printer.service.slicing: TRACE
+    org.springframework.transaction: DEBUG
+  file:
+    name: logs/printer-dev.log
+
+# Disable SSL in development
+server:
+  port: 8080
+  ssl:
+    enabled: false
+
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: production
+
+  # Production specific datasource settings
+  datasource:
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+
+# Production optimizations
+slicing:
+  max-concurrent: 5  # More concurrent jobs in production
+  timeout-minutes: 20  # Stricter timeout in production
+  engines:
+    prusa:
+      timeout-seconds: 180  # Stricter timeout in production
+      max-memory-mb: 4096   # More memory in production
+    cura:
+      enabled: true
+      max-memory-mb: 3072
+
+  # Production monitoring
+  monitoring:
+    performance-logging: false  # Reduce logging overhead in production
+    export-metrics: true
+
+# Production logging
+logging:
+  level:
+    it.aredegalli.printer.service.slicing: INFO
+    org.springframework.transaction: WARN
+  file:
+    name: logs/printer-prod.log
+    max-size: 100MB
+    max-history: 30
+
+# Production actuator security
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+
+---
+# Testing Profile
+spring:
+  config:
+    activate:
+      on-profile: test
+
+  # Test database configuration
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+# Test slicing configuration
+slicing:
+  engines:
+    prusa:
+      enabled: false  # Use mock in tests
+    cura:
+      enabled: false  # Use mock in tests
+    default:
+      enabled: true
+      timeout-seconds: 10  # Fast timeout for tests
+
+  temp-directory: /tmp/test-slicing
+  cleanup:
+    auto-cleanup-enabled: true
+    temp-files-retention-hours: 1
+
+# Test logging
+logging:
+  level:
+    it.aredegalli.printer: DEBUG
+    org.springframework.test: INFO

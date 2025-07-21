@@ -1,0 +1,234 @@
+# docker-compose.yml - OTTIMIZZATO per performance minime
+version: '3.8'
+
+services:
+  # Priority container - Risorse minime ma priorità massima
+  slicer-priority:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.prusaslicer
+    container_name: prusaslicer-priority
+    hostname: slicer-priority
+    environment:
+      - CONTAINER_ID=slicer-priority
+      - JAVA_APP_HOST=host.docker.internal
+      - JAVA_APP_PORT=8443
+      - SLICER_PRIORITY=0  # Highest priority
+      - MAX_CONCURRENT_JOBS=1
+      - CONTAINER_TYPE=priority
+      # Optimization flags
+      - LOW_RESOURCE_MODE=true
+      - MEMORY_LIMIT_MB=768
+    ports:
+      - "9090:9090"
+    volumes:
+      - slicer-priority-temp:/app/temp
+      - slicer-priority-output:/app/output
+      - ./docker/configs:/app/configs:ro
+    networks:
+      - slicing-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "/app/health-check.sh" ]
+      interval: 45s  # Meno frequenti per ridurre overhead
+      timeout: 10s
+      retries: 2     # Meno retry
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 768M      # Ridotto da 4G
+          cpus: '0.8'       # Ridotto da 2.0
+        reservations:
+          memory: 256M      # Ridotto da 1G
+          cpus: '0.3'       # Ridotto da 1.0
+    # Stop gracefully to save resources
+    stop_grace_period: 10s
+
+  # Standard container 1 - Performance minime
+  slicer-1:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.prusaslicer
+    container_name: prusaslicer-1
+    hostname: slicer-1
+    environment:
+      - CONTAINER_ID=slicer-1
+      - JAVA_APP_HOST=host.docker.internal
+      - JAVA_APP_PORT=8443
+      - SLICER_PRIORITY=1
+      - MAX_CONCURRENT_JOBS=1
+      - CONTAINER_TYPE=standard
+      # Optimization flags
+      - LOW_RESOURCE_MODE=true
+      - MEMORY_LIMIT_MB=512
+    ports:
+      - "9091:9090"
+    volumes:
+      - slicer-1-temp:/app/temp
+      - slicer-1-output:/app/output
+      - ./docker/configs:/app/configs:ro
+    networks:
+      - slicing-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "/app/health-check.sh" ]
+      interval: 60s      # Ancora meno frequenti
+      timeout: 15s
+      retries: 2
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          memory: 512M   # Ridotto da 2G
+          cpus: '0.5'    # Ridotto da 1.0
+        reservations:
+          memory: 128M   # Ridotto da 512M
+          cpus: '0.2'    # Ridotto da 0.5
+    stop_grace_period: 10s
+
+  # Standard container 2 - Performance minime
+  slicer-2:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.prusaslicer
+    container_name: prusaslicer-2
+    hostname: slicer-2
+    environment:
+      - CONTAINER_ID=slicer-2
+      - JAVA_APP_HOST=host.docker.internal
+      - JAVA_APP_PORT=8443
+      - SLICER_PRIORITY=2
+      - MAX_CONCURRENT_JOBS=1
+      - CONTAINER_TYPE=standard
+      # Optimization flags
+      - LOW_RESOURCE_MODE=true
+      - MEMORY_LIMIT_MB=512
+    ports:
+      - "9092:9090"
+    volumes:
+      - slicer-2-temp:/app/temp
+      - slicer-2-output:/app/output
+      - ./docker/configs:/app/configs:ro
+    networks:
+      - slicing-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "/app/health-check.sh" ]
+      interval: 60s
+      timeout: 15s
+      retries: 2
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          memory: 512M   # Ridotto da 2G
+          cpus: '0.5'    # Ridotto da 1.0
+        reservations:
+          memory: 128M   # Ridotto da 512M
+          cpus: '0.2'    # Ridotto da 0.5
+    stop_grace_period: 10s
+
+  # Batch container - Risorse ultra-minime
+  slicer-batch:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.prusaslicer
+    container_name: prusaslicer-batch
+    hostname: slicer-batch
+    environment:
+      - CONTAINER_ID=slicer-batch
+      - JAVA_APP_HOST=host.docker.internal
+      - JAVA_APP_PORT=8443
+      - SLICER_PRIORITY=10  # Lowest priority
+      - MAX_CONCURRENT_JOBS=1  # Ridotto da 2
+      - CONTAINER_TYPE=batch
+      # Optimization flags
+      - LOW_RESOURCE_MODE=true
+      - MEMORY_LIMIT_MB=384
+      - BATCH_MODE=true
+    ports:
+      - "9093:9090"
+    volumes:
+      - slicer-batch-temp:/app/temp
+      - slicer-batch-output:/app/output
+      - ./docker/configs:/app/configs:ro
+    networks:
+      - slicing-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "/app/health-check.sh" ]
+      interval: 120s     # Check ogni 2 minuti per batch
+      timeout: 20s
+      retries: 1         # Solo 1 retry
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 384M   # Ridotto da 1G
+          cpus: '0.3'    # Ridotto da 0.8
+        reservations:
+          memory: 96M    # Ridotto da 256M
+          cpus: '0.1'    # Ridotto da 0.3
+    stop_grace_period: 5s
+    profiles:
+      - batch
+
+networks:
+  slicing-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: slicing-br
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24  # Subnet più piccola
+
+volumes:
+  slicer-1-temp:
+    driver: local
+    driver_opts:
+      type: tmpfs  # Use RAM for temp files (faster)
+      device: tmpfs
+      o: size=200m,uid=1000,gid=1000
+  slicer-1-output:
+    driver: local
+  slicer-2-temp:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=200m,uid=1000,gid=1000
+  slicer-2-output:
+    driver: local
+  slicer-priority-temp:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=300m,uid=1000,gid=1000  # Più spazio per priority
+  slicer-priority-output:
+    driver: local
+  slicer-batch-temp:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=100m,uid=1000,gid=1000  # Meno spazio per batch
+  slicer-batch-output:
+    driver: local
+
+# ============================================
+# PROFILI PER DIVERSI SCENARI DI UTILIZZO
+# ============================================
+
+# Profilo minimal - Solo 1 container
+x-minimal-profile: &minimal-profile
+  profiles: [ "minimal" ]
+
+# Profilo development - 2 container
+x-development-profile: &development-profile
+  profiles: [ "development", "default" ]
+
+# Profilo production - Tutti i container
+x-production-profile: &production-profile
+  profiles: [ "production", "full" ]
