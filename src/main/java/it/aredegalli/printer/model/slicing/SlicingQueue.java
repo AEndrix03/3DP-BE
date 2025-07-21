@@ -22,11 +22,11 @@ public class SlicingQueue {
     @Column(name = "id", nullable = false)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "model_id")
     private Model model;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "slicing_property_id")
     private SlicingProperty slicingProperty;
 

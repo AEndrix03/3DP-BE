@@ -7,12 +7,10 @@ import it.aredegalli.printer.enums.slicing.SlicingStatus;
 import it.aredegalli.printer.mapper.slicing.MaterialMapper;
 import it.aredegalli.printer.mapper.slicing.SlicingResultMapper;
 import it.aredegalli.printer.model.model.Model;
-import it.aredegalli.printer.model.slicing.SlicingProperty;
-import it.aredegalli.printer.model.slicing.SlicingQueue;
-import it.aredegalli.printer.model.slicing.SlicingResult;
-import it.aredegalli.printer.model.slicing.SlicingResultMaterial;
+import it.aredegalli.printer.model.slicing.*;
 import it.aredegalli.printer.repository.model.ModelRepository;
 import it.aredegalli.printer.repository.slicing.SlicingQueueRepository;
+import it.aredegalli.printer.repository.slicing.SlicingQueueResultRepository;
 import it.aredegalli.printer.repository.slicing.SlicingResultMaterialRepository;
 import it.aredegalli.printer.repository.slicing.SlicingResultRepository;
 import it.aredegalli.printer.service.log.LogService;
@@ -29,19 +27,17 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SlicingServiceImpl implements SlicingService {
 
-    // Existing fields
     private final SlicingResultRepository slicingResultRepository;
     private final SlicingResultMapper slicingResultMapper;
     private final SlicingResultMaterialRepository slicingResultMaterialRepository;
     private final MaterialMapper materialMapper;
     private final LogService log;
 
-    // NEW FIELDS
     private final SlicingQueueRepository slicingQueueRepository;
     private final SlicingEngine slicingEngine;
     private final ModelRepository modelRepository;
+    private final SlicingQueueResultRepository slicingQueueResultRepository;
 
-    // EXISTING METHODS
     @Override
     public List<SlicingResultDto> getAllSlicingResultBySourceId(UUID sourceId) {
         return slicingResultRepository.findBySourceFile_Id(sourceId)
@@ -118,6 +114,12 @@ public class SlicingServiceImpl implements SlicingService {
             queue.setCompletedAt(Instant.now());
             queue.setProgressPercentage(100);
             slicingQueueRepository.save(queue);
+
+            slicingQueueResultRepository.save(SlicingQueueResult.builder()
+                    .slicingQueue(queue)
+                    .slicingResult(result)
+                    .build()
+            );
 
             log.info("SlicingServiceImpl", "Slicing completed for queue: " + queueId);
 
