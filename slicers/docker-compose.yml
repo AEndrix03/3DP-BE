@@ -6,7 +6,7 @@ services:
   slicer-priority:
     build:
       context: .
-      dockerfile: docker/Dockerfile.prusaslicer
+      dockerfile: prusa/docker/Dockerfile.prusaslicer
     container_name: prusaslicer-priority
     hostname: slicer-priority
     environment:
@@ -49,7 +49,7 @@ services:
   slicer-1:
     build:
       context: .
-      dockerfile: docker/Dockerfile.prusaslicer
+      dockerfile: prusa/docker/Dockerfile.prusaslicer
     container_name: prusaslicer-1
     hostname: slicer-1
     environment:
@@ -91,7 +91,7 @@ services:
   slicer-2:
     build:
       context: .
-      dockerfile: docker/Dockerfile.prusaslicer
+      dockerfile: prusa/docker/Dockerfile.prusaslicer
     container_name: prusaslicer-2
     hostname: slicer-2
     environment:
@@ -133,7 +133,7 @@ services:
   slicer-batch:
     build:
       context: .
-      dockerfile: docker/Dockerfile.prusaslicer
+      dockerfile: prusa/docker/Dockerfile.prusaslicer
     container_name: prusaslicer-batch
     hostname: slicer-batch
     environment:
