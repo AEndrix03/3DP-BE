@@ -72,7 +72,8 @@ public class SlicingContainer {
     @Column(name = "memory_limit_mb")
     private Integer memoryLimitMb;
 
-    @Column(name = "cpu_limit", precision = 5, scale = 2)  // Fixed precision for double
+    // FIXED: Remove precision/scale for Double type - floating point types don't support scale
+    @Column(name = "cpu_limit")
     private Double cpuLimit;
 
     @Column(name = "disk_space_mb")

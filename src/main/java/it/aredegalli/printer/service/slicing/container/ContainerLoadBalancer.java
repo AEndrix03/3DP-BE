@@ -9,126 +9,65 @@ import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 
+/**
+ * Simple load balancer for selecting optimal containers
+ */
 @Component
 @RequiredArgsConstructor
 public class ContainerLoadBalancer {
 
     private final LogService logService;
 
+    /**
+     * Select the best container based on current load and priority
+     */
     public SlicingContainer selectContainer(List<SlicingContainer> availableContainers,
-                                            Model model, SlicingProperty properties) {
+                                            Model model,
+                                            SlicingProperty properties) {
 
-        if (availableContainers.isEmpty()) {
+        if (availableContainers == null || availableContainers.isEmpty()) {
+            logService.warn("ContainerLoadBalancer", "No containers available for selection");
             return null;
         }
 
-        logService.debug("ContainerLoadBalancer",
-                String.format("Selecting from %d available containers for model: %s",
-                        availableContainers.size(), model.getName()));
-
-        // 1. Filter by job priority and model characteristics
-        List<SlicingContainer> candidates = filterCandidateContainers(availableContainers, model, properties);
-
-        if (candidates.isEmpty()) {
-            candidates = availableContainers; // Fallback to all available
-        }
-
-        // 2. Apply load balancing algorithm
-        return applyLoadBalancingAlgorithm(candidates);
-    }
-
-    private List<SlicingContainer> filterCandidateContainers(List<SlicingContainer> containers,
-                                                             Model model, SlicingProperty properties) {
-
-        long modelSizeMB = model.getFileResource().getFileSize() / (1024 * 1024);
-
-        // Priority-based filtering
-        if (shouldUsePriorityContainer(properties)) {
-            List<SlicingContainer> priorityContainers = containers.stream()
-                    .filter(c -> "priority".equals(c.getContainerType()))
-                    .collect(Collectors.toList());
-
-            if (!priorityContainers.isEmpty()) {
-                logService.debug("ContainerLoadBalancer", "Using priority containers for high-priority job");
-                return priorityContainers;
-            }
-        }
-
-        // Size-based filtering
-        if (modelSizeMB > 50) { // Large models
-            List<SlicingContainer> standardContainers = containers.stream()
-                    .filter(c -> !"batch".equals(c.getContainerType()))
-                    .collect(Collectors.toList());
-
-            if (!standardContainers.isEmpty()) {
-                logService.debug("ContainerLoadBalancer", "Using standard containers for large model");
-                return standardContainers;
-            }
-        } else if (modelSizeMB < 5) { // Small models
-            List<SlicingContainer> batchContainers = containers.stream()
-                    .filter(c -> "batch".equals(c.getContainerType()))
-                    .collect(Collectors.toList());
-
-            if (!batchContainers.isEmpty()) {
-                logService.debug("ContainerLoadBalancer", "Using batch containers for small model");
-                return batchContainers;
-            }
-        }
-
-        return containers; // No special filtering needed
-    }
-
-    private SlicingContainer applyLoadBalancingAlgorithm(List<SlicingContainer> containers) {
-        // Weighted scoring algorithm considering:
-        // 1. Container priority (lower = better)
-        // 2. Current load (lower = better)
-        // 3. Recent performance (success rate, etc.)
-
-        return containers.stream()
-                .min(Comparator.comparing(this::calculateContainerScore))
+        // Strategy: Select container with lowest current job count and highest priority
+        SlicingContainer selected = availableContainers.stream()
+                .sorted(Comparator
+                        .comparingInt(SlicingContainer::getCurrentActiveJobs) // Least busy first
+                        .thenComparing(SlicingContainer::getPriority) // Then by priority
+                        .thenComparing(SlicingContainer::getContainerName)) // Then by name for consistency
+                .findFirst()
                 .orElse(null);
+
+        if (selected != null) {
+            logService.debug("ContainerLoadBalancer",
+                    String.format("Selected container %s - Active jobs: %d/%d, Priority: %d",
+                            selected.getContainerName(),
+                            selected.getCurrentActiveJobs(),
+                            selected.getMaxConcurrentJobs(),
+                            selected.getPriority()));
+        }
+
+        return selected;
     }
 
-    private double calculateContainerScore(SlicingContainer container) {
-        double score = 0.0;
+    /**
+     * Calculate container load score (0-100, lower is better)
+     */
+    public double calculateLoadScore(SlicingContainer container) {
+        if (container.getMaxConcurrentJobs() == 0) {
+            return 100.0; // Container not available
+        }
 
-        // Priority weight (0-100, lower priority = lower score)
-        score += container.getPriority() * 10;
-
-        // Load weight (0-100, lower load = lower score)
-        score += container.getLoadPercentage();
-
-        // Health weight (penalties for recent failures, etc.)
-        double successRate = calculateSuccessRate(container);
-        score += (100 - successRate) * 0.5;
-
-        logService.debug("ContainerLoadBalancer",
-                String.format("Container %s score: %.2f (priority=%d, load=%.1f%%, success=%.1f%%)",
-                        container.getContainerName(), score, container.getPriority(),
-                        container.getLoadPercentage(), successRate));
-
-        return score;
+        double loadRatio = (double) container.getCurrentActiveJobs() / container.getMaxConcurrentJobs();
+        return loadRatio * 100.0;
     }
 
-    private boolean shouldUsePriorityContainer(SlicingProperty properties) {
-        // Logic to determine if job needs priority container
-        // Could be based on:
-        // - Explicit priority flag
-        // - Job complexity
-        // - User/customer tier
-        // - Time constraints
-
-        return false; // Placeholder - implement based on business rules
-    }
-
-    private double calculateSuccessRate(SlicingContainer container) {
-        long total = container.getTotalJobsProcessed();
-        long failed = container.getTotalJobsFailed();
-
-        if (total == 0) return 100.0; // New container, assume 100%
-
-        return ((double) (total - failed) / total) * 100.0;
+    /**
+     * Check if container can handle additional job
+     */
+    public boolean canAcceptJob(SlicingContainer container) {
+        return container.getCurrentActiveJobs() < container.getMaxConcurrentJobs();
     }
 }
