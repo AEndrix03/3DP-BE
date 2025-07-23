@@ -1,4 +1,4 @@
-# application.yml - Enhanced with Slicing Engine Configuration
+# application.yml - Enhanced with CuraEngine Integration (CLEAN VERSION)
 spring:
   application:
     name: 3D Printer BE
@@ -88,8 +88,6 @@ security:
     max-age: 3600
   whitelist:
     ips: ${PRINTER_WHITELIST_IPS:127.0.0.1,::1}
-
-  # AES Encryption Key for sensitive data
   crypto:
     aes-secret-key: ${PRINTER_AES_KEY}
 
@@ -153,14 +151,14 @@ stl2glb:
   url: ${STL2GLB_SERVICE_URL:http://dev.aredegalli.it:9002}
 
 # ======================================
-# SLICING ENGINE CONFIGURATION
+# SLICING ENGINE CONFIGURATION - MODIFICHE MINIMALI
 # ======================================
 slicing:
   # General slicing settings
-  max-concurrent: ${SLICING_MAX_CONCURRENT:3}
+  max-concurrent: ${SLICING_MAX_CONCURRENT:2}
   timeout-minutes: ${SLICING_TIMEOUT_MINUTES:30}
   temp-directory: ${SLICING_TEMP_DIR:/tmp/slicing}
-  default-engine: ${SLICING_DEFAULT_ENGINE:prusa}
+  default-engine: ${SLICING_DEFAULT_ENGINE:external}  # CAMBIATO: era prusa, ora external (CuraEngine)
 
   # Engine selection configuration
   engine-selection:
@@ -171,17 +169,17 @@ slicing:
 
   # Individual engine configurations
   engines:
-    # PrusaSlicer Configuration
+    # PrusaSlicer Configuration - DISABILITATO
     prusa:
-      enabled: ${SLICING_PRUSA_ENABLED:true}
+      enabled: ${SLICING_PRUSA_ENABLED:false}  # CAMBIATO: era true
       binary-path: ${PRUSA_SLICER_PATH:/usr/bin/prusa-slicer}
       config-template-path: ${PRUSA_CONFIG_PATH:/app/config/prusa-templates}
       timeout-seconds: 300
       max-memory-mb: 2048
-      priority: 1  # Higher priority for complex jobs
+      priority: 99  # Bassa priorità
       supported-formats: [ "stl", "obj", "3mf" ]
 
-    # Cura Engine Configuration
+    # Cura Engine Configuration - DISABILITATO (locale)
     cura:
       enabled: ${SLICING_CURA_ENABLED:false}
       binary-path: ${CURA_ENGINE_PATH:/usr/bin/CuraEngine}
@@ -198,13 +196,13 @@ slicing:
       priority: 99  # Lowest priority
       supported-formats: [ "stl" ]
 
-    # External Slicing Service (optional)
+    # External Slicing Service (CuraEngine API) - ABILITATO
     external:
-      enabled: ${SLICING_EXTERNAL_ENABLED:false}
-      service-url: ${EXTERNAL_SLICER_URL:http://slicer-service:8080}
+      enabled: ${SLICING_EXTERNAL_ENABLED:true}  # CAMBIATO: era false
+      service-url: ${EXTERNAL_SLICER_URL:http://cura-engine:4000}  # CAMBIATO: punta al container Docker
       api-key: ${EXTERNAL_SLICER_API_KEY:}
-      timeout-seconds: 600
-      priority: 3
+      timeout-seconds: 300  # RIDOTTO: era 600
+      priority: 1  # CAMBIATO: era 3, ora è priorità massima
       supported-formats: [ "stl", "obj", "3mf", "ply" ]
 
   # Quality profiles mapping
@@ -299,7 +297,7 @@ printer:
       build-volume: [ 250, 210, 210 ]
       nozzle-diameter: 0.4
       supports-auto-leveling: true
-      recommended-engines: [ "prusa" ]
+      recommended-engines: [ "external", "default" ]  # CAMBIATO: external prima
       max-print-speed: 200
       heated-bed: true
 
@@ -307,7 +305,7 @@ printer:
       build-volume: [ 220, 220, 250 ]
       nozzle-diameter: 0.4
       supports-auto-leveling: false
-      recommended-engines: [ "cura", "prusa" ]
+      recommended-engines: [ "external", "default" ]  # CAMBIATO: external prima
       max-print-speed: 120
       heated-bed: true
 
@@ -315,7 +313,7 @@ printer:
       build-volume: [ 223, 223, 205 ]
       nozzle-diameter: 0.4
       supports-auto-leveling: true
-      recommended-engines: [ "cura" ]
+      recommended-engines: [ "external" ]  # CAMBIATO: solo external
       max-print-speed: 150
       heated-bed: true
 
@@ -337,13 +335,15 @@ spring:
 
 # Development specific slicing configuration
 slicing:
-  max-concurrent: 2  # Limit concurrent jobs in development
+  max-concurrent: 2
   engines:
+    external:
+      service-url: "http://localhost:4000"  # Locale per dev
+      enabled: true
     prusa:
-      binary-path: ${PRUSA_SLICER_PATH:/usr/local/bin/prusa-slicer}
-      timeout-seconds: 600  # Longer timeout for development
+      enabled: false
     cura:
-      enabled: false  # Disable Cura in development
+      enabled: false
 
 # Enhanced logging for development
 logging:
@@ -374,19 +374,21 @@ spring:
 
 # Production optimizations
 slicing:
-  max-concurrent: 5  # More concurrent jobs in production
-  timeout-minutes: 20  # Stricter timeout in production
+  max-concurrent: 2
+  timeout-minutes: 20
   engines:
-    prusa:
-      timeout-seconds: 180  # Stricter timeout in production
-      max-memory-mb: 4096   # More memory in production
-    cura:
+    external:
+      service-url: "http://cura-engine:4000"  # Container name per prod
+      timeout-seconds: 180
       enabled: true
-      max-memory-mb: 3072
+    prusa:
+      enabled: false
+    cura:
+      enabled: false
 
   # Production monitoring
   monitoring:
-    performance-logging: false  # Reduce logging overhead in production
+    performance-logging: false
     export-metrics: true
 
 # Production logging
@@ -429,12 +431,14 @@ spring:
 slicing:
   engines:
     prusa:
-      enabled: false  # Use mock in tests
+      enabled: false
     cura:
-      enabled: false  # Use mock in tests
+      enabled: false
+    external:
+      enabled: false  # Usa mock in tests
     default:
       enabled: true
-      timeout-seconds: 10  # Fast timeout for tests
+      timeout-seconds: 10
 
   temp-directory: /tmp/test-slicing
   cleanup:
