@@ -104,6 +104,86 @@ public class SlicingProperty {
     @Column(name = "is_public", length = 8)
     private String isPublic;
 
+    @Column(name = "printer_type")
+    private String printerType; // MINI_15X15, ENDER3, PRUSA_I3, etc.
+
+    @Column(name = "bed_width")
+    private String bedWidth; // mm
+
+    @Column(name = "bed_depth")
+    private String bedDepth; // mm
+
+    @Column(name = "bed_height")
+    private String bedHeight; // mm
+
+    // Quality Profile
+    @Column(name = "quality_profile")
+    private String qualityProfile; // DRAFT, NORMAL, FINE, ULTRA_FINE, MINIATURE
+
+    @Column(name = "line_width_mm")
+    private String lineWidthMm; // 0.4 typically
+
+    @Column(name = "top_bottom_thickness_mm")
+    private String topBottomThicknessMm;
+
+    // Material Profile
+    @Column(name = "material_type")
+    private String materialType; // PLA, ABS, PETG, TPU, WOOD
+
+    @Column(name = "retraction_enabled")
+    private String retractionEnabled;
+
+    @Column(name = "retraction_distance_mm")
+    private String retractionDistanceMm;
+
+    // Advanced Support Settings
+    @Column(name = "support_density_percentage")
+    private String supportDensityPercentage;
+
+    @Column(name = "support_z_distance_mm")
+    private String supportZDistanceMm;
+
+    @Column(name = "support_pattern")
+    private String supportPattern; // lines, grid, triangles
+
+    // Adhesion Settings
+    @Column(name = "adhesion_type")
+    private String adhesionType; // skirt, brim, raft
+
+    // Cooling Settings
+    @Column(name = "fan_enabled")
+    private String fanEnabled;
+
+    @Column(name = "fan_speed_percentage")
+    private String fanSpeedPercentage;
+
+    // Advanced Speed Settings
+    @Column(name = "outer_wall_speed_mms")
+    private String outerWallSpeedMmS;
+
+    @Column(name = "inner_wall_speed_mms")
+    private String innerWallSpeedMmS;
+
+    @Column(name = "infill_speed_mms")
+    private String infillSpeedMmS;
+
+    @Column(name = "top_bottom_speed_mms")
+    private String topBottomSpeedMmS;
+
+    // Layer-specific Settings
+    @Column(name = "initial_layer_height_mm")
+    private String initialLayerHeightMm;
+
+    @Column(name = "initial_layer_speed_mms")
+    private String initialLayerSpeedMmS;
+
+    // Z-hop Settings
+    @Column(name = "zhop_enabled")
+    private String zhopEnabled;
+
+    @Column(name = "zhop_height_mm")
+    private String zhopHeightMm;
+
     // Auto-set timestamps
     @PrePersist
     public void prePersist() {
@@ -115,5 +195,83 @@ public class SlicingProperty {
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = Instant.now();
+    }
+
+    // ======================================
+    // UTILITY METHODS
+    // ======================================
+
+    /**
+     * Creates a SlicingProperty with optimal settings for 15x15cm bed
+     */
+    public static SlicingProperty createMini15x15Profile() {
+        return SlicingProperty.builder()
+                .printerType("MINI_15X15")
+                .bedDepth("150")
+                .bedHeight("150")
+                .bedWidth("150")
+                .qualityProfile("NORMAL")
+                .materialType("PLA")
+                .build();
+    }
+
+    /**
+     * Creates a high-quality profile for miniatures
+     */
+    public static SlicingProperty createMiniatureProfile() {
+        return SlicingProperty.builder()
+                .printerType("MINI_15X15")
+                .bedDepth("150")
+                .bedHeight("150")
+                .bedWidth("150")
+                .qualityProfile("MINIATURE")
+                .materialType("PLA")
+                .build();
+    }
+
+    /**
+     * Creates a fast prototyping profile
+     */
+    public static SlicingProperty createDraftProfile() {
+        return SlicingProperty.builder()
+                .printerType("MINI_15X15")
+                .bedDepth("150")
+                .bedHeight("150")
+                .bedWidth("150")
+                .qualityProfile("DRAFT")
+                .materialType("PLA")
+                .build();
+    }
+
+    /**
+     * Validates that all required parameters are set
+     */
+    public boolean isValid() {
+        return layerHeightMm != null &&
+                extruderTempC > 0 &&
+                bedTempC >= 0 &&
+                printSpeedMmS != null &&
+                infillPercentage != null;
+    }
+
+    /**
+     * Returns a summary string of the configuration
+     */
+    public String getConfigurationSummary() {
+        return String.format("%s | %s | %.2fmm | %d°C/%d°C | %s%% infill",
+                printerType != null ? printerType : "Generic",
+                qualityProfile != null ? qualityProfile : "Custom",
+                parseFloat(layerHeightMm, 0.2f),
+                (int) extruderTempC,
+                (int) bedTempC,
+                infillPercentage != null ? infillPercentage : "20");
+    }
+
+    private float parseFloat(String value, float defaultValue) {
+        try {
+            return value != null ? Float.parseFloat(value) : defaultValue;
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 }

@@ -156,8 +156,8 @@ public class SlicingServiceImpl implements SlicingService {
             // Update status to processing
             updateQueueStatus(queue, SlicingStatus.PROCESSING, "Starting slicing process", 0);
 
-            // 1. Validate model thoroughly
-            ModelValidation validation = validateModel(queue.getModel());
+            // 1. Validate model
+            ModelValidation validation = validateModelIfNeeded(queue.getModel());
             if (validation.getHasErrors()) {
                 throw new SlicingProcessException("Model validation failed: " + validation.getErrorDetails());
             }

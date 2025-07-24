@@ -1,6 +1,5 @@
 package it.aredegalli.printer.config;
 
-import it.aredegalli.printer.service.slicing.container.ContainerManager;
 import it.aredegalli.printer.service.slicing.engine.SlicingEngineSelector;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.actuate.health.Health;
@@ -14,7 +13,6 @@ import java.util.Map;
 public class SlicingHealthIndicator implements HealthIndicator {
 
     private final SlicingEngineSelector engineSelector;
-    private final ContainerManager containerManager;
 
     @Override
     public Health health() {
@@ -33,20 +31,6 @@ public class SlicingHealthIndicator implements HealthIndicator {
             } catch (Exception e) {
                 builder.down().withDetail("default_engine_error", e.getMessage());
                 return builder.build();
-            }
-
-            // Check container status if available
-            try {
-                boolean hasContainers = containerManager.hasAvailableContainers();
-                int healthyContainers = containerManager.getHealthyContainerCount();
-
-                builder.withDetail("docker_containers_available", hasContainers);
-                builder.withDetail("healthy_containers", healthyContainers);
-                builder.withDetail("containers_by_type", containerManager.getContainersByType());
-
-            } catch (Exception e) {
-                // Container manager not available, but that's OK
-                builder.withDetail("docker_status", "not_available");
             }
 
             // Overall status
