@@ -1,4 +1,4 @@
-package it.aredegalli.printer.dto.slicing;
+package it.aredegalli.printer.dto.material;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

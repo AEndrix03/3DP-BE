@@ -1,7 +1,7 @@
 package it.aredegalli.printer.service.slicing;
 
 import it.aredegalli.common.exception.NotFoundException;
-import it.aredegalli.printer.dto.slicing.MaterialDto;
+import it.aredegalli.printer.dto.material.MaterialDto;
 import it.aredegalli.printer.dto.slicing.SlicingResultDto;
 import it.aredegalli.printer.dto.slicing.queue.SlicingQueueDto;
 import it.aredegalli.printer.enums.slicing.SlicingStatus;
