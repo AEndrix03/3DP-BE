@@ -8,7 +8,7 @@ import org.mapstruct.Mapping;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring", uses = {SlicingProfileMapper.class, MaterialMapper.class})
+@Mapper(componentModel = "spring", uses = {SlicingPropertyMapper.class, MaterialMapper.class})
 public interface SlicingResultMapper {
 
     @Mapping(target = "sourceId", source = "sourceFile.id")

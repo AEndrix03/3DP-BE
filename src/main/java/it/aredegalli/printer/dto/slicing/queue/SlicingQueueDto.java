@@ -25,4 +25,5 @@ public class SlicingQueueDto {
     private Instant completedAt;
     private String errorMessage;
     private Integer progressPercentage;
+    private String createdByUserId;
 }

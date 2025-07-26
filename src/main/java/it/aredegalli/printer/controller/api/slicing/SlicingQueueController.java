@@ -35,7 +35,7 @@ public class SlicingQueueController {
             return ResponseEntity.notFound().build();
         }
 
-        return ResponseEntity.ok(slicingQueueMapper.toDtoList(queue));
+        return ResponseEntity.ok(queue);
     }
 
     @PostMapping()
@@ -77,7 +77,7 @@ public class SlicingQueueController {
             return ResponseEntity.notFound().build();
         }
 
-        return ResponseEntity.ok(slicingQueueMapper.toDto(queue));
+        return ResponseEntity.ok(queue);
     }
 
     @PostMapping("/slice-now")
