@@ -1,6 +1,7 @@
-package it.aredegalli.printer.model.slicing;
+package it.aredegalli.printer.model.slicing.result;
 
 import it.aredegalli.printer.model.resource.FileResource;
+import it.aredegalli.printer.model.slicing.property.SlicingProperty;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

@@ -1,7 +1,7 @@
-package it.aredegalli.printer.repository.slicing;
+package it.aredegalli.printer.repository.slicing.queue;
 
 import it.aredegalli.printer.enums.slicing.SlicingStatus;
-import it.aredegalli.printer.model.slicing.SlicingQueue;
+import it.aredegalli.printer.model.slicing.queue.SlicingQueue;
 import it.aredegalli.printer.repository.UUIDRepository;
 import jakarta.validation.constraints.Size;
 

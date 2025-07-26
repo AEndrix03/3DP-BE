@@ -1,7 +1,7 @@
 package it.aredegalli.printer.service.slicing;
 
 import it.aredegalli.printer.dto.slicing.SlicingResultDto;
-import it.aredegalli.printer.model.slicing.SlicingQueue;
+import it.aredegalli.printer.model.slicing.queue.SlicingQueue;
 
 import java.util.List;
 import java.util.UUID;

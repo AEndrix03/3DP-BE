@@ -3,7 +3,7 @@ package it.aredegalli.printer.model.job;
 import it.aredegalli.printer.enums.job.JobStatusEnum;
 import it.aredegalli.printer.enums.job.JobStatusEnumConverter;
 import it.aredegalli.printer.model.printer.Printer;
-import it.aredegalli.printer.model.slicing.SlicingResult;
+import it.aredegalli.printer.model.slicing.result.SlicingResult;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

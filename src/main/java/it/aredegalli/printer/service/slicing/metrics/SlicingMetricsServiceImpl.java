@@ -1,8 +1,8 @@
 package it.aredegalli.printer.service.slicing.metrics;
 
-import it.aredegalli.printer.model.slicing.SlicingMetric;
-import it.aredegalli.printer.model.slicing.SlicingResult;
-import it.aredegalli.printer.repository.slicing.SlicingMetricsRepository;
+import it.aredegalli.printer.model.slicing.metric.SlicingMetric;
+import it.aredegalli.printer.model.slicing.result.SlicingResult;
+import it.aredegalli.printer.repository.slicing.metric.SlicingMetricsRepository;
 import it.aredegalli.printer.service.log.LogService;
 import it.aredegalli.printer.service.resource.FileResourceService;
 import it.aredegalli.printer.service.slicing.analysis.GcodeAnalyzer;

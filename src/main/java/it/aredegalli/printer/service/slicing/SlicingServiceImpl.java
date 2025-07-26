@@ -7,13 +7,20 @@ import it.aredegalli.printer.enums.slicing.SlicingStatus;
 import it.aredegalli.printer.mapper.slicing.MaterialMapper;
 import it.aredegalli.printer.mapper.slicing.SlicingResultMapper;
 import it.aredegalli.printer.model.model.Model;
-import it.aredegalli.printer.model.slicing.*;
+import it.aredegalli.printer.model.slicing.metric.SlicingMetric;
+import it.aredegalli.printer.model.slicing.property.SlicingProperty;
+import it.aredegalli.printer.model.slicing.queue.SlicingQueue;
+import it.aredegalli.printer.model.slicing.queue.SlicingQueueResult;
+import it.aredegalli.printer.model.slicing.result.SlicingResult;
+import it.aredegalli.printer.model.slicing.result.SlicingResultMaterial;
 import it.aredegalli.printer.model.validation.ModelValidation;
 import it.aredegalli.printer.repository.model.ModelRepository;
-import it.aredegalli.printer.repository.slicing.SlicingQueueRepository;
-import it.aredegalli.printer.repository.slicing.SlicingQueueResultRepository;
-import it.aredegalli.printer.repository.slicing.SlicingResultMaterialRepository;
-import it.aredegalli.printer.repository.slicing.SlicingResultRepository;
+import it.aredegalli.printer.repository.slicing.property.SlicingPropertyMaterialRepository;
+import it.aredegalli.printer.repository.slicing.property.SlicingPropertyRepository;
+import it.aredegalli.printer.repository.slicing.queue.SlicingQueueRepository;
+import it.aredegalli.printer.repository.slicing.queue.SlicingQueueResultRepository;
+import it.aredegalli.printer.repository.slicing.result.SlicingResultMaterialRepository;
+import it.aredegalli.printer.repository.slicing.result.SlicingResultRepository;
 import it.aredegalli.printer.repository.validation.ModelValidationRepository;
 import it.aredegalli.printer.service.log.LogService;
 import it.aredegalli.printer.service.slicing.engine.SlicingEngine;
@@ -42,9 +49,10 @@ public class SlicingServiceImpl implements SlicingService {
     private final MaterialMapper materialMapper;
     private final LogService log;
 
-    // Enhanced dependencies for real slicing
     private final SlicingQueueRepository slicingQueueRepository;
     private final SlicingQueueResultRepository slicingQueueResultRepository;
+    private final SlicingPropertyRepository slicingPropertyRepository;
+    private final SlicingPropertyMaterialRepository slicingPropertyMaterialRepository;
     private final SlicingEngineSelector engineSelector;
     private final SlicingMetricsService metricsService;
     private final ModelRepository modelRepository;
@@ -190,8 +198,7 @@ public class SlicingServiceImpl implements SlicingService {
         }
     }
 
-    @Retryable(value = {SlicingProcessException.class}, maxAttempts = 3,
-            backoff = @Backoff(delay = 30000, multiplier = 2))
+    @Retryable(backoff = @Backoff(delay = 30000, multiplier = 2))
     private SlicingResult executeSlicingWithRetry(SlicingEngine engine, SlicingQueue queue) {
         try {
             log.info("SlicingServiceImpl",
@@ -323,32 +330,8 @@ public class SlicingServiceImpl implements SlicingService {
         updateQueueStatus(queue, SlicingStatus.FAILED, e.getMessage(), null);
     }
 
-    // ======================================
-    // UTILITY METHODS (Updated to integrate with existing system)
-    // ======================================
-
-    // TODO: Replace with actual SlicingProperty repository integration when available
     private SlicingProperty findSlicingPropertyById(UUID id) {
-        // This should be replaced with actual repository call
-        // For now, return a default profile - integrate with existing SlicingProperty system
-        return SlicingProperty.builder()
-                .id(id)
-                .name("Default Profile")
-                .layerHeightMm("0.2")
-                .printSpeedMmS("50")
-                .travelSpeedMmS("150")
-                .infillPercentage("20")
-                .infillPattern("grid")
-                .perimeterCount(2)
-                .topSolidLayers(3)
-                .bottomSolidLayers(3)
-                .extruderTempC(210)
-                .bedTempC(60)
-                .supportsEnabled("false")
-                .brimEnabled("false")
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
-                .build();
+        return this.slicingPropertyRepository.findById(id).orElse(null);
     }
 
     private SlicingResultDto toDto(SlicingResult slicingResult) {

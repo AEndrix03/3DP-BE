@@ -1,6 +1,7 @@
-package it.aredegalli.printer.model.slicing;
+package it.aredegalli.printer.model.slicing.queue;
 
 import it.aredegalli.printer.model.model.Model;
+import it.aredegalli.printer.model.slicing.property.SlicingProperty;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.*;

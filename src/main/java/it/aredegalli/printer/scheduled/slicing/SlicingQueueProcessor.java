@@ -1,7 +1,7 @@
-package it.aredegalli.printer.scheduled;
+package it.aredegalli.printer.scheduled.slicing;
 
 import it.aredegalli.printer.enums.slicing.SlicingStatus;
-import it.aredegalli.printer.repository.slicing.SlicingQueueRepository;
+import it.aredegalli.printer.repository.slicing.queue.SlicingQueueRepository;
 import it.aredegalli.printer.service.log.LogService;
 import it.aredegalli.printer.service.slicing.SlicingService;
 import lombok.RequiredArgsConstructor;

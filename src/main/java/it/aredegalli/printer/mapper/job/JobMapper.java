@@ -11,10 +11,6 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface JobMapper {
 
-    /*@Mapping(target = "printerId", source = "printer.id")
-    @Mapping(target = "resourceId", source = "fileResource.id")
-    @Mapping(target = "statusCode", source = "status.code")
-    @Mapping(target = "totalLines", ignore = true)*/
     JobDto toDto(Job job);
 
     List<JobDto> toDto(List<Job> jobs);

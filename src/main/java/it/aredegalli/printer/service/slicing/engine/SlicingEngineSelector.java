@@ -1,7 +1,7 @@
 package it.aredegalli.printer.service.slicing.engine;
 
 import it.aredegalli.printer.model.model.Model;
-import it.aredegalli.printer.model.slicing.SlicingProperty;
+import it.aredegalli.printer.model.slicing.property.SlicingProperty;
 import it.aredegalli.printer.service.log.LogService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -132,8 +132,8 @@ public class SlicingEngineSelector {
         requirements.qualityLevel = analyzeQualityRequirements(properties);
 
         // Analyze special features needed
-        requirements.needsSupports = parseBoolean(properties.getSupportsEnabled());
-        requirements.needsBrim = parseBoolean(properties.getBrimEnabled());
+        requirements.needsSupports = properties.getSupportsEnabled();
+        requirements.needsBrim = properties.getBrimEnabled();
         requirements.hasAdvancedSettings = properties.getAdvancedSettings() != null &&
                 !properties.getAdvancedSettings().trim().isEmpty();
 
@@ -158,7 +158,7 @@ public class SlicingEngineSelector {
 
     private QualityLevel analyzeQualityRequirements(SlicingProperty properties) {
         try {
-            double layerHeight = Double.parseDouble(properties.getLayerHeightMm());
+            double layerHeight = Double.parseDouble(properties.getLayerHeightMm().toString());
 
             if (layerHeight >= 0.3) {
                 return QualityLevel.DRAFT;

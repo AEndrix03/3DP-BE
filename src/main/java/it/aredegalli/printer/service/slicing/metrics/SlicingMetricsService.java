@@ -1,7 +1,7 @@
 package it.aredegalli.printer.service.slicing.metrics;
 
-import it.aredegalli.printer.model.slicing.SlicingMetric;
-import it.aredegalli.printer.model.slicing.SlicingResult;
+import it.aredegalli.printer.model.slicing.metric.SlicingMetric;
+import it.aredegalli.printer.model.slicing.result.SlicingResult;
 
 import java.util.UUID;
 

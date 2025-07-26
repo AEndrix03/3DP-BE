@@ -1,5 +1,6 @@
 package it.aredegalli.printer.controller.api;
 
+import it.aredegalli.printer.dto.slicing.SlicingPropertyDto;
 import it.aredegalli.printer.dto.slicing.SlicingResultDto;
 import it.aredegalli.printer.dto.slicing.queue.SlicingQueueCreateDto;
 import it.aredegalli.printer.dto.slicing.queue.SlicingQueueDto;
@@ -9,6 +10,7 @@ import it.aredegalli.printer.service.log.LogService;
 import it.aredegalli.printer.service.slicing.SlicingService;
 import it.aredegalli.printer.service.slicing.engine.SlicingEngine;
 import it.aredegalli.printer.service.slicing.engine.SlicingEngineSelector;
+import it.aredegalli.printer.service.slicing.property.SlicingPropertyService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
@@ -28,12 +30,8 @@ public class SlicingController {
     private final SlicingService slicingService;
     private final LogService log;
 
-    // Enhanced dependencies for engine management
     private final SlicingEngineSelector engineSelector;
-
-    // ======================================
-    // EXISTING ENDPOINTS (Enhanced)
-    // ======================================
+    private final SlicingPropertyService slicingPropertyService;
 
     @GetMapping()
     public ResponseEntity<SlicingResultDto> getSlicingResultById(@RequestParam("id") @NotNull UUID id) {
@@ -53,10 +51,6 @@ public class SlicingController {
         slicingService.deleteSlicingResultById(id);
         return ResponseEntity.noContent().build();
     }
-
-    // ======================================
-    // QUEUE MANAGEMENT ENDPOINTS
-    // ======================================
 
     @PostMapping("/queue")
     public ResponseEntity<Map<String, Object>> queueSlicing(@Valid @RequestBody SlicingQueueCreateDto request) {
@@ -122,10 +116,6 @@ public class SlicingController {
 
         return ResponseEntity.accepted().body(response);
     }
-
-    // ======================================
-    // NEW ENGINE MANAGEMENT ENDPOINTS
-    // ======================================
 
     @GetMapping("/engines")
     public ResponseEntity<Map<String, Object>> getAvailableEngines() {
@@ -195,8 +185,6 @@ public class SlicingController {
         try {
             SlicingEngine engine = engineSelector.getEngine(engineName);
 
-            // This would require a method to get Model by ID
-            // For now, just test engine availability
             boolean available = engineSelector.isEngineAvailable(engineName);
 
             response.put("engine", engine.getName());
@@ -215,10 +203,6 @@ public class SlicingController {
         return ResponseEntity.ok(response);
     }
 
-    // ======================================
-    // QUEUE STATISTICS ENDPOINTS
-    // ======================================
-
     @GetMapping("/queue/stats")
     public ResponseEntity<Map<String, Object>> getQueueStatistics() {
         log.info("SlicingController", "Getting queue statistics");
@@ -226,8 +210,6 @@ public class SlicingController {
         Map<String, Object> response = new HashMap<>();
 
         try {
-            // This would require additional repository methods to get queue stats
-            // For now, return basic structure
             response.put("total_queued", 0);
             response.put("total_processing", 0);
             response.put("total_completed", 0);
@@ -244,10 +226,6 @@ public class SlicingController {
 
         return ResponseEntity.ok(response);
     }
-
-    // ======================================
-    // HEALTH CHECK ENDPOINTS
-    // ======================================
 
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> getSlicingHealth() {
@@ -277,10 +255,6 @@ public class SlicingController {
         return ResponseEntity.ok(response);
     }
 
-    // ======================================
-    // UTILITY ENDPOINTS
-    // ======================================
-
     @PostMapping("/cancel/{queueId}")
     public ResponseEntity<Map<String, Object>> cancelSlicing(@PathVariable UUID queueId) {
         log.info("SlicingController", "Cancelling slicing for queue: " + queueId);
@@ -303,5 +277,17 @@ public class SlicingController {
         response.put("queueId", queueId);
 
         return ResponseEntity.accepted().body(response);
+    }
+
+    @GetMapping("/property")
+    public ResponseEntity<List<SlicingPropertyDto>> getSlicingPropertyByUserId(@RequestParam String userId) {
+        log.info("SlicingController", "Get SlicingProperty  by User Id: " + userId);
+        return ResponseEntity.ok(this.slicingPropertyService.getSlicingPropertyByUserId(userId));
+    }
+
+    @PatchMapping("/property")
+    public ResponseEntity<UUID> saveSlicingProperty(@RequestBody SlicingPropertyDto dto) {
+        log.info("SlicingController", "Patching Slicing Property");
+        return ResponseEntity.ok(this.slicingPropertyService.saveSlicingProperty(dto));
     }
 }

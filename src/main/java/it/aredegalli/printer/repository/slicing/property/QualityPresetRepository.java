@@ -1,6 +1,6 @@
-package it.aredegalli.printer.repository.slicing;
+package it.aredegalli.printer.repository.slicing.property;
 
-import it.aredegalli.printer.model.slicing.QualityPreset;
+import it.aredegalli.printer.model.slicing.property.QualityPreset;
 import it.aredegalli.printer.repository.UUIDRepository;
 
 import java.util.List;

@@ -1,7 +1,7 @@
 package it.aredegalli.printer.mapper.slicing;
 
 import it.aredegalli.printer.dto.slicing.MaterialDto;
-import it.aredegalli.printer.model.slicing.Material;
+import it.aredegalli.printer.model.slicing.property.Material;
 import org.mapstruct.Mapper;
 
 import java.util.List;

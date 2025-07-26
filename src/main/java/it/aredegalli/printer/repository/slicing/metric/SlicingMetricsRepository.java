@@ -1,6 +1,6 @@
-package it.aredegalli.printer.repository.slicing;
+package it.aredegalli.printer.repository.slicing.metric;
 
-import it.aredegalli.printer.model.slicing.SlicingMetric;
+import it.aredegalli.printer.model.slicing.metric.SlicingMetric;
 import it.aredegalli.printer.repository.UUIDRepository;
 
 import java.util.Optional;
