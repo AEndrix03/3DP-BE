@@ -1,6 +1,6 @@
 package it.aredegalli.printer.model.slicing.result;
 
-import it.aredegalli.printer.model.slicing.property.Material;
+import it.aredegalli.printer.model.material.Material;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;

@@ -16,6 +16,9 @@ public class SlicingQueueCreateDto {
     @NotNull(message = "Slicing property ID is required")
     private UUID slicingPropertyId;
 
+    @NotNull(message = "User ID is required")
+    private String userId;
+
     @Min(value = 1, message = "Priority must be between 1 and 10")
     @Max(value = 10, message = "Priority must be between 1 and 10")
     private Integer priority = 5;

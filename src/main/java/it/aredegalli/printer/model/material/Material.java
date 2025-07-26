@@ -1,4 +1,4 @@
-package it.aredegalli.printer.model.slicing.property;
+package it.aredegalli.printer.model.material;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

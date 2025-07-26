@@ -1,6 +1,7 @@
 package it.aredegalli.printer.mapper.slicing;
 
 import it.aredegalli.printer.dto.slicing.SlicingResultDto;
+import it.aredegalli.printer.mapper.material.MaterialMapper;
 import it.aredegalli.printer.model.slicing.result.SlicingResult;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

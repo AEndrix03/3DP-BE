@@ -4,7 +4,7 @@ import it.aredegalli.common.exception.NotFoundException;
 import it.aredegalli.printer.dto.slicing.MaterialDto;
 import it.aredegalli.printer.dto.slicing.SlicingResultDto;
 import it.aredegalli.printer.enums.slicing.SlicingStatus;
-import it.aredegalli.printer.mapper.slicing.MaterialMapper;
+import it.aredegalli.printer.mapper.material.MaterialMapper;
 import it.aredegalli.printer.mapper.slicing.SlicingResultMapper;
 import it.aredegalli.printer.model.model.Model;
 import it.aredegalli.printer.model.slicing.metric.SlicingMetric;
@@ -65,10 +65,6 @@ public class SlicingServiceImpl implements SlicingService {
     @Value("${slicing.error-handling.fallback-to-default:true}")
     private boolean fallbackToDefault;
 
-    // ======================================
-    // ORIGINAL METHODS - Enhanced
-    // ======================================
-
     @Override
     public List<SlicingResultDto> getAllSlicingResultBySourceId(UUID sourceId) {
         return slicingResultRepository.findBySourceFile_Id(sourceId)
@@ -90,10 +86,8 @@ public class SlicingServiceImpl implements SlicingService {
         SlicingResult result = slicingResultRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Slicing result not found"));
 
-        // Delete associated queue results
         slicingQueueResultRepository.deleteBySlicingResultId(id);
 
-        // Delete associated metrics
         Optional<SlicingMetric> metrics = Optional.ofNullable(metricsService.getMetricsBySlicingResultId(id));
         metrics.ifPresent(m -> log.debug("SlicingServiceImpl", "Deleting metrics for result: " + id));
 
@@ -101,28 +95,21 @@ public class SlicingServiceImpl implements SlicingService {
         log.info("SlicingServiceImpl", "Slicing result with ID " + id + " was deleted");
     }
 
-    // ======================================
-    // NEW QUEUE METHODS
-    // ======================================
-
     @Override
     @Transactional
-    public UUID queueSlicing(UUID modelId, UUID slicingPropertyId, Integer priority) {
+    public UUID queueSlicing(UUID modelId, UUID slicingPropertyId, String userId, Integer priority) {
         log.info("SlicingServiceImpl", "Queueing slicing for model: " + modelId);
 
-        // Validate model exists
         Model model = modelRepository.findById(modelId)
                 .orElseThrow(() -> new NotFoundException("Model not found: " + modelId));
 
         SlicingProperty property = findSlicingPropertyById(slicingPropertyId);
 
-        // Pre-validate model if needed
         ModelValidation validation = validateModelIfNeeded(model);
         if (validation != null && validation.getHasErrors()) {
             throw new IllegalArgumentException("Model has validation errors: " + validation.getErrorDetails());
         }
 
-        // Create queue entry
         SlicingQueue queue = SlicingQueue.builder()
                 .model(model)
                 .slicingProperty(property)
@@ -130,6 +117,7 @@ public class SlicingServiceImpl implements SlicingService {
                 .status(SlicingStatus.QUEUED.getCode())
                 .createdAt(Instant.now())
                 .progressPercentage(0)
+                .createdByUserId(userId)
                 .build();
 
         queue = slicingQueueRepository.save(queue);
@@ -142,9 +130,10 @@ public class SlicingServiceImpl implements SlicingService {
         return slicingQueueRepository.findById(queueId).orElse(null);
     }
 
-    // ======================================
-    // ENHANCED SLICING PROCESSING
-    // ======================================
+    @Override
+    public List<SlicingQueue> getAllSlicingQueueByCreatedUserId(String userId) {
+        return slicingQueueRepository.findByCreatedByUserId(userId);
+    }
 
     @Override
     @Async("slicingExecutor")
@@ -161,32 +150,25 @@ public class SlicingServiceImpl implements SlicingService {
                         queueId, queue.getModel().getName()));
 
         try {
-            // Update status to processing
             updateQueueStatus(queue, SlicingStatus.PROCESSING, "Starting slicing process", 0);
 
-            // 1. Validate model
             ModelValidation validation = validateModelIfNeeded(queue.getModel());
             if (validation.getHasErrors()) {
                 throw new SlicingProcessException("Model validation failed: " + validation.getErrorDetails());
             }
             updateQueueProgress(queue, 10, "Model validated");
 
-            // 2. Select optimal slicing engine
             SlicingEngine engine = selectSlicingEngine(queue);
             updateQueueProgress(queue, 20, "Engine selected: " + engine.getName());
 
-            // 3. Execute slicing with retry capability
             SlicingResult result = executeSlicingWithRetry(engine, queue);
             updateQueueProgress(queue, 80, "Slicing completed, analyzing results");
 
-            // 4. Calculate real metrics from G-code
             SlicingMetric metrics = metricsService.calculateMetrics(result);
             updateQueueProgress(queue, 95, "Metrics calculated");
 
-            // 5. Create queue result mapping
             createQueueResult(queue, result);
 
-            // 6. Mark as completed
             updateQueueStatus(queue, SlicingStatus.COMPLETED, "Slicing completed successfully", 100);
 
             log.info("SlicingServiceImpl",
@@ -235,10 +217,6 @@ public class SlicingServiceImpl implements SlicingService {
         }
     }
 
-    // ======================================
-    // MODEL VALIDATION
-    // ======================================
-
     private ModelValidation validateModelIfNeeded(Model model) {
         Optional<ModelValidation> existing = modelValidationRepository.findByModelId(model.getId());
 
@@ -260,7 +238,6 @@ public class SlicingServiceImpl implements SlicingService {
 
         boolean hasErrors = false;
 
-        // Basic file validation
         if (model.getFileResource() == null) {
             hasErrors = true;
             validationBuilder.errorDetails(java.util.Map.of("file", "No file resource associated"));
@@ -279,10 +256,6 @@ public class SlicingServiceImpl implements SlicingService {
 
         return modelValidationRepository.save(validation);
     }
-
-    // ======================================
-    // QUEUE MANAGEMENT HELPERS
-    // ======================================
 
     private void updateQueueStatus(SlicingQueue queue, SlicingStatus status, String message, Integer progress) {
         queue.setStatus(status.getCode());
@@ -349,7 +322,6 @@ public class SlicingServiceImpl implements SlicingService {
         return dto;
     }
 
-    // Custom exception for slicing process
     public static class SlicingProcessException extends RuntimeException {
         public SlicingProcessException(String message) {
             super(message);

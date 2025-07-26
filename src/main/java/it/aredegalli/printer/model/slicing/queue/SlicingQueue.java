@@ -54,4 +54,7 @@ public class SlicingQueue {
     @Column(name = "progress_percentage")
     private Integer progressPercentage;
 
+    @Column(name = "created_by_user_id")
+    private String createdByUserId;
+
 }

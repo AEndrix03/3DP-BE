@@ -15,7 +15,9 @@ public interface SlicingService {
 
     SlicingQueue getQueueStatus(UUID queueId);
 
-    UUID queueSlicing(UUID modelId, UUID slicingPropertyId, Integer priority);
+    UUID queueSlicing(UUID modelId, UUID slicingPropertyId, String userId, Integer priority);
+
+    List<SlicingQueue> getAllSlicingQueueByCreatedUserId(String userId);
 
     void processSlicing(UUID queueId);
 }
