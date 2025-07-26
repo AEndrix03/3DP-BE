@@ -3,8 +3,10 @@ package it.aredegalli.printer.service.slicing;
 import it.aredegalli.common.exception.NotFoundException;
 import it.aredegalli.printer.dto.slicing.MaterialDto;
 import it.aredegalli.printer.dto.slicing.SlicingResultDto;
+import it.aredegalli.printer.dto.slicing.queue.SlicingQueueDto;
 import it.aredegalli.printer.enums.slicing.SlicingStatus;
 import it.aredegalli.printer.mapper.material.MaterialMapper;
+import it.aredegalli.printer.mapper.slicing.SlicingQueueMapper;
 import it.aredegalli.printer.mapper.slicing.SlicingResultMapper;
 import it.aredegalli.printer.model.model.Model;
 import it.aredegalli.printer.model.slicing.metric.SlicingMetric;
@@ -15,7 +17,6 @@ import it.aredegalli.printer.model.slicing.result.SlicingResult;
 import it.aredegalli.printer.model.slicing.result.SlicingResultMaterial;
 import it.aredegalli.printer.model.validation.ModelValidation;
 import it.aredegalli.printer.repository.model.ModelRepository;
-import it.aredegalli.printer.repository.slicing.property.SlicingPropertyMaterialRepository;
 import it.aredegalli.printer.repository.slicing.property.SlicingPropertyRepository;
 import it.aredegalli.printer.repository.slicing.queue.SlicingQueueRepository;
 import it.aredegalli.printer.repository.slicing.queue.SlicingQueueResultRepository;
@@ -52,11 +53,12 @@ public class SlicingServiceImpl implements SlicingService {
     private final SlicingQueueRepository slicingQueueRepository;
     private final SlicingQueueResultRepository slicingQueueResultRepository;
     private final SlicingPropertyRepository slicingPropertyRepository;
-    private final SlicingPropertyMaterialRepository slicingPropertyMaterialRepository;
     private final SlicingEngineSelector engineSelector;
     private final SlicingMetricsService metricsService;
     private final ModelRepository modelRepository;
     private final ModelValidationRepository modelValidationRepository;
+    private final SlicingQueueMapper slicingQueueMapper;
+
 
     // Configuration
     @Value("${slicing.error-handling.max-retries:2}")
@@ -126,13 +128,15 @@ public class SlicingServiceImpl implements SlicingService {
     }
 
     @Override
-    public SlicingQueue getQueueStatus(UUID queueId) {
-        return slicingQueueRepository.findById(queueId).orElse(null);
+    public SlicingQueueDto getQueueStatus(UUID queueId) {
+        var queue = slicingQueueRepository.findById(queueId).orElseThrow(() -> new NotFoundException("SlicingQueue not found"));
+        return slicingQueueMapper.toDto(queue);
     }
 
     @Override
-    public List<SlicingQueue> getAllSlicingQueueByCreatedUserId(String userId) {
-        return slicingQueueRepository.findByCreatedByUserId(userId);
+    public List<SlicingQueueDto> getAllSlicingQueueByCreatedUserId(String userId) {
+        var queue = slicingQueueRepository.findByCreatedByUserId(userId);
+        return slicingQueueMapper.toDtoList(queue);
     }
 
     @Override

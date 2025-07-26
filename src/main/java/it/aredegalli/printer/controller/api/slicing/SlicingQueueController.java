@@ -3,7 +3,6 @@ package it.aredegalli.printer.controller.api.slicing;
 import it.aredegalli.printer.dto.slicing.queue.SlicingQueueCreateDto;
 import it.aredegalli.printer.dto.slicing.queue.SlicingQueueDto;
 import it.aredegalli.printer.dto.slicing.queue.SlicingRequestDto;
-import it.aredegalli.printer.mapper.slicing.SlicingQueueMapper;
 import it.aredegalli.printer.service.log.LogService;
 import it.aredegalli.printer.service.slicing.SlicingService;
 import it.aredegalli.printer.service.slicing.engine.SlicingEngineSelector;
@@ -26,7 +25,6 @@ public class SlicingQueueController {
     private final LogService log;
 
     private final SlicingEngineSelector engineSelector;
-    private final SlicingQueueMapper slicingQueueMapper;
 
     @GetMapping()
     public ResponseEntity<List<SlicingQueueDto>> getQueueByUserId(@RequestParam() String userId) {
