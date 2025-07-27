@@ -35,10 +35,13 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 @RequiredArgsConstructor
@@ -65,6 +68,12 @@ public class SlicingServiceImpl implements SlicingService {
 
     @Value("${slicing.error-handling.fallback-to-default:true}")
     private boolean fallbackToDefault;
+
+    @Value("${slicing.duplicate-prevention.enabled:true}")
+    private boolean duplicatePreventionEnabled;
+
+    // Concurrent processing prevention
+    private final ConcurrentHashMap<UUID, ReentrantLock> processingLocks = new ConcurrentHashMap<>();
 
     @Override
     public List<SlicingResultDto> getAllSlicingResultBySourceId(UUID sourceId) {
@@ -101,10 +110,24 @@ public class SlicingServiceImpl implements SlicingService {
     public UUID queueSlicing(UUID modelId, UUID slicingPropertyId, String userId, Integer priority) {
         log.info("SlicingServiceImpl", "Queueing slicing for model: " + modelId);
 
+        // Check for duplicate queue entries if enabled
+        if (duplicatePreventionEnabled) {
+            Optional<SlicingQueue> existingQueue = findActiveQueueForModel(modelId, slicingPropertyId);
+            if (existingQueue.isPresent()) {
+                log.warn("SlicingServiceImpl",
+                        "Duplicate slicing request detected for model: " + modelId +
+                                ", returning existing queue: " + existingQueue.get().getId());
+                return existingQueue.get().getId();
+            }
+        }
+
         Model model = modelRepository.findById(modelId)
                 .orElseThrow(() -> new NotFoundException("Model not found: " + modelId));
 
         SlicingProperty property = findSlicingPropertyById(slicingPropertyId);
+        if (property == null) {
+            throw new NotFoundException("Slicing property not found: " + slicingPropertyId);
+        }
 
         ModelValidation validation = validateModelIfNeeded(model);
         if (validation != null && validation.getHasErrors()) {
@@ -126,9 +149,26 @@ public class SlicingServiceImpl implements SlicingService {
         return queue.getId();
     }
 
+    /**
+     * Find active queue entry for the same model and properties to prevent duplicates
+     */
+    private Optional<SlicingQueue> findActiveQueueForModel(UUID modelId, UUID slicingPropertyId) {
+        List<SlicingQueue> activeQueues = slicingQueueRepository.findByModelId(modelId);
+
+        return activeQueues.stream()
+                .filter(queue -> {
+                    String status = queue.getStatus();
+                    return (SlicingStatus.QUEUED.getCode().equals(status) ||
+                            SlicingStatus.PROCESSING.getCode().equals(status)) &&
+                            queue.getSlicingProperty().getId().equals(slicingPropertyId);
+                })
+                .findFirst();
+    }
+
     @Override
     public SlicingQueueDto getQueueStatus(UUID queueId) {
-        var queue = slicingQueueRepository.findById(queueId).orElseThrow(() -> new NotFoundException("SlicingQueue not found"));
+        var queue = slicingQueueRepository.findById(queueId)
+                .orElseThrow(() -> new NotFoundException("SlicingQueue not found"));
         return slicingQueueMapper.toDto(queue);
     }
 
@@ -142,48 +182,90 @@ public class SlicingServiceImpl implements SlicingService {
     @Async("slicingExecutor")
     @Transactional
     public void processSlicing(UUID queueId) {
+        // Prevent concurrent processing of the same queue
+        ReentrantLock lock = processingLocks.computeIfAbsent(queueId, k -> new ReentrantLock());
+
+        if (!lock.tryLock()) {
+            log.warn("SlicingServiceImpl",
+                    "Slicing queue " + queueId + " is already being processed, skipping duplicate");
+            return;
+        }
+
+        try {
+            processSlicingInternal(queueId);
+        } finally {
+            lock.unlock();
+            processingLocks.remove(queueId);
+        }
+    }
+
+    private void processSlicingInternal(UUID queueId) {
         SlicingQueue queue = slicingQueueRepository.findById(queueId).orElse(null);
         if (queue == null) {
             log.error("SlicingServiceImpl", "Queue not found: " + queueId);
             return;
         }
 
+        // Check if already processed or processing
+        if (!SlicingStatus.QUEUED.getCode().equals(queue.getStatus())) {
+            log.warn("SlicingServiceImpl",
+                    "Queue " + queueId + " is already in status: " + queue.getStatus() + ", skipping");
+            return;
+        }
+
         log.info("SlicingServiceImpl",
-                String.format("Starting slicing process for queue: %s, model: %s",
-                        queueId, queue.getModel().getName()));
+                String.format("Starting slicing process for queue: %s, model: %s (size: %.2f MB)",
+                        queueId, queue.getModel().getName(),
+                        queue.getModel().getFileResource().getFileSize() / 1024.0 / 1024.0));
+
+        Instant startTime = Instant.now();
 
         try {
             updateQueueStatus(queue, SlicingStatus.PROCESSING, "Starting slicing process", 0);
 
+            // Validation phase
             ModelValidation validation = validateModelIfNeeded(queue.getModel());
             if (validation.getHasErrors()) {
                 throw new SlicingProcessException("Model validation failed: " + validation.getErrorDetails());
             }
             updateQueueProgress(queue, 10, "Model validated");
 
+            // Engine selection phase
             SlicingEngine engine = selectSlicingEngine(queue);
             updateQueueProgress(queue, 20, "Engine selected: " + engine.getName());
 
+            // Slicing phase
+            updateQueueProgress(queue, 30, "Starting slicing with " + engine.getName());
             SlicingResult result = executeSlicingWithRetry(engine, queue);
             updateQueueProgress(queue, 80, "Slicing completed, analyzing results");
 
+            // Metrics calculation phase
             SlicingMetric metrics = metricsService.calculateMetrics(result);
             updateQueueProgress(queue, 95, "Metrics calculated");
 
+            // Finalization phase
             createQueueResult(queue, result);
 
-            updateQueueStatus(queue, SlicingStatus.COMPLETED, "Slicing completed successfully", 100);
+            Duration processingTime = Duration.between(startTime, Instant.now());
+            String completionMessage = String.format(
+                    "Slicing completed successfully in %d seconds. Lines: %d, Est. print time: %d min",
+                    processingTime.getSeconds(), result.getLines(), metrics.getEstimatedPrintTimeMinutes());
 
-            log.info("SlicingServiceImpl",
-                    String.format("Slicing completed successfully for queue: %s, result: %s, layers: %d, time: %d min",
-                            queueId, result.getId(), metrics.getLayerCount(), metrics.getEstimatedPrintTimeMinutes()));
+            updateQueueStatus(queue, SlicingStatus.COMPLETED, completionMessage, 100);
+
+            log.info("SlicingServiceImpl", completionMessage + " (Queue: " + queueId + ")");
 
         } catch (Exception e) {
-            handleSlicingFailure(queue, e);
+            Duration processingTime = Duration.between(startTime, Instant.now());
+            handleSlicingFailure(queue, e, processingTime);
         }
     }
 
-    @Retryable(backoff = @Backoff(delay = 30000, multiplier = 2))
+    @Retryable(
+            value = {SlicingProcessException.class},
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 10000, multiplier = 2.0)
+    )
     private SlicingResult executeSlicingWithRetry(SlicingEngine engine, SlicingQueue queue) {
         try {
             log.info("SlicingServiceImpl",
@@ -196,13 +278,16 @@ public class SlicingServiceImpl implements SlicingService {
                     "Slicing attempt failed with " + engine.getName() + ": " + e.getMessage());
 
             // If retries exhausted and fallback enabled, try default engine
-            if (fallbackToDefault && !engine.getName().equalsIgnoreCase("default")) {
+            if (fallbackToDefault && !engine.getName().toLowerCase().contains("default")) {
                 log.info("SlicingServiceImpl", "Attempting fallback to default engine");
                 SlicingEngine defaultEngine = engineSelector.getDefaultEngine();
-                return defaultEngine.slice(queue.getModel(), queue.getSlicingProperty());
+
+                if (!defaultEngine.getName().equals(engine.getName())) {
+                    return defaultEngine.slice(queue.getModel(), queue.getSlicingProperty());
+                }
             }
 
-            throw new SlicingProcessException("Slicing failed after retries: " + e.getMessage(), e);
+            throw new SlicingProcessException("Slicing failed: " + e.getMessage(), e);
         }
     }
 
@@ -210,9 +295,9 @@ public class SlicingServiceImpl implements SlicingService {
         try {
             SlicingEngine engine = engineSelector.selectEngine(queue.getSlicingProperty(), queue.getModel());
             log.info("SlicingServiceImpl",
-                    String.format("Selected engine: %s for model: %s (size: %d bytes)",
+                    String.format("Selected engine: %s for model: %s (size: %.2f MB)",
                             engine.getName(), queue.getModel().getName(),
-                            queue.getModel().getFileResource().getFileSize()));
+                            queue.getModel().getFileResource().getFileSize() / 1024.0 / 1024.0));
             return engine;
         } catch (Exception e) {
             log.warn("SlicingServiceImpl", "Engine selection failed, using default: " + e.getMessage());
@@ -222,13 +307,7 @@ public class SlicingServiceImpl implements SlicingService {
 
     private ModelValidation validateModelIfNeeded(Model model) {
         Optional<ModelValidation> existing = modelValidationRepository.findByModelId(model.getId());
-
-        if (existing.isPresent()) {
-            return existing.get();
-        }
-
-        // Perform basic validation
-        return validateModel(model);
+        return existing.orElseGet(() -> validateModel(model));
     }
 
     private ModelValidation validateModel(Model model) {
@@ -276,7 +355,9 @@ public class SlicingServiceImpl implements SlicingService {
 
         slicingQueueRepository.save(queue);
         log.debug("SlicingServiceImpl",
-                String.format("Queue %s: %s (%d%%) - %s", queue.getId(), status, progress, message));
+                String.format("Queue %s: %s (%s%%) - %s",
+                        queue.getId(), status,
+                        progress != null ? progress : "null", message));
     }
 
     private void updateQueueProgress(SlicingQueue queue, Integer progress, String message) {
@@ -298,12 +379,15 @@ public class SlicingServiceImpl implements SlicingService {
                 String.format("Created queue result mapping: queue=%s, result=%s", queue.getId(), result.getId()));
     }
 
-    private void handleSlicingFailure(SlicingQueue queue, Exception e) {
+    private void handleSlicingFailure(SlicingQueue queue, Exception e, Duration processingTime) {
+        String errorMessage = String.format("Slicing failed after %d seconds: %s",
+                processingTime.getSeconds(), e.getMessage());
+
         log.error("SlicingServiceImpl",
                 String.format("Slicing failed for queue: %s, model: %s - %s",
-                        queue.getId(), queue.getModel().getName(), e.getMessage()));
+                        queue.getId(), queue.getModel().getName(), errorMessage));
 
-        updateQueueStatus(queue, SlicingStatus.FAILED, e.getMessage(), null);
+        updateQueueStatus(queue, SlicingStatus.FAILED, errorMessage, null);
     }
 
     private SlicingProperty findSlicingPropertyById(UUID id) {

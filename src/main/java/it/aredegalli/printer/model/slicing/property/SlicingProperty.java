@@ -6,6 +6,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -241,13 +243,12 @@ public class SlicingProperty {
     private String qualityProfile = "standard";
 
     // === ADVANCED SETTINGS ===
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "advanced_settings", columnDefinition = "jsonb")
     @Builder.Default
     private String advancedSettings = "{}";
 
-    // === METADATA ===
-    @NotNull(message = "Slicer ID is required")
-    @Column(name = "slicer_id", nullable = false)
+    @Column(name = "slicer_id")
     private UUID slicerId;
 
     @NotNull(message = "Created by user ID is required")
