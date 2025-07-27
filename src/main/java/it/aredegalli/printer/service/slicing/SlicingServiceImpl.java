@@ -59,7 +59,6 @@ public class SlicingServiceImpl implements SlicingService {
     private final ModelValidationRepository modelValidationRepository;
     private final SlicingQueueMapper slicingQueueMapper;
 
-
     // Configuration
     @Value("${slicing.error-handling.max-retries:2}")
     private int maxRetries;

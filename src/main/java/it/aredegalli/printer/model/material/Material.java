@@ -20,7 +20,6 @@ import java.time.Instant;
 })
 public class Material {
 
-    // Changed to UUID for consistency with other entities
     @Id
     @GeneratedValue(generator = "UUID")
     @Column(name = "id", nullable = false, updatable = false)
