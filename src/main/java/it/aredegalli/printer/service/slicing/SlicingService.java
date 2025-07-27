@@ -20,6 +20,4 @@ public interface SlicingService {
     List<SlicingQueueDto> getAllSlicingQueueByCreatedUserId(String userId);
 
     void processSlicing(UUID queueId);
-
-    boolean cancelSlicingJob(UUID queueId, String userId, String reason);
 }
