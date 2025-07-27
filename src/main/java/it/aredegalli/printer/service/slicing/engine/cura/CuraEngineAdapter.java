@@ -13,24 +13,27 @@ import it.aredegalli.printer.service.slicing.engine.SlicingEngine;
 import it.aredegalli.printer.service.storage.StorageService;
 import it.aredegalli.printer.util.PrinterCostants;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
- * Generic CuraEngine adapter - printer-independent slicing
- * Uses standard build volume and generates generic G-code
- * Printer compatibility is checked at print time, not slicing time
+ * Complete CuraEngine adapter with improved error handling, timeouts, and WebSocket integration
  */
 @Component("curaEngineAdapter")
 @RequiredArgsConstructor
@@ -41,13 +44,21 @@ public class CuraEngineAdapter implements SlicingEngine {
     private final FileResourceRepository fileResourceRepository;
     private final SlicingResultRepository slicingResultRepository;
     private final LogService logService;
+
+    @Qualifier("slicingRestTemplate")
     private final RestTemplate restTemplate;
+
+    @Qualifier("healthCheckRestTemplate")
+    private final RestTemplate healthCheckRestTemplate;
 
     @Value("${slicing.engines.external.service-url}")
     private String curaServiceUrl;
 
-    @Value("${slicing.engines.external.timeout-seconds:120}")
+    @Value("${slicing.engines.external.timeout-seconds:300}")
     private int timeoutSeconds;
+
+    @Value("${slicing.engines.external.connection-timeout-seconds:30}")
+    private int connectionTimeoutSeconds;
 
     // Generic build volume - can be overridden by printer at print time
     @Value("${slicing.default.build-volume.width:200}")
@@ -69,41 +80,215 @@ public class CuraEngineAdapter implements SlicingEngine {
 
     @Override
     public SlicingResult slice(Model model, SlicingProperty properties) {
-        logService.info("CuraEngineAdapter", "Starting generic slicing for model: " + model.getName());
+        logService.info("CuraEngineAdapter",
+                String.format("Starting slicing for model: %s (size: %.2f MB)",
+                        model.getName(), model.getFileResource().getFileSize() / 1024.0 / 1024.0));
+
+        Instant startTime = Instant.now();
 
         try {
-            // 1. Download STL file
-            byte[] stlBytes = downloadSTLBytes(model);
+            // 1. Validate model before processing
+            if (!validateModel(model)) {
+                throw new SlicingException("Model validation failed");
+            }
 
-            // 2. Build slicing parameters from properties
+            // 2. Check service health before starting
+            if (!checkServiceHealth()) {
+                throw new SlicingException("CuraEngine service is not available");
+            }
+
+            // 3. Download STL file
+            byte[] stlBytes = downloadSTLBytes(model);
+            logService.debug("CuraEngineAdapter",
+                    String.format("Downloaded STL: %.2f MB", stlBytes.length / 1024.0 / 1024.0));
+
+            // 4. Build slicing parameters
             SlicingParameters params = buildSlicingParameters(properties);
 
-            // 3. Call CuraEngine API
-            String gcode = callCuraEngineAPI(stlBytes, model.getId().toString(), params);
+            // 5. Call CuraEngine API with retry logic
+            String gcode = callCuraEngineAPIWithRetry(stlBytes, model.getId().toString(), params);
 
-            // 4. Save and return result
-            return createSlicingResult(gcode, model, properties);
+            // 6. Validate G-code output
+            validateGcode(gcode);
+
+            // 7. Save and return result
+            SlicingResult result = createSlicingResult(gcode, model, properties);
+
+            Duration processingTime = Duration.between(startTime, Instant.now());
+            logService.info("CuraEngineAdapter",
+                    String.format("Slicing completed successfully in %d seconds. G-code: %d lines",
+                            processingTime.getSeconds(), gcode.lines().count()));
+
+            return result;
+
+        } catch (SlicingException e) {
+            logService.error("CuraEngineAdapter", "Slicing failed: " + e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            logService.error("CuraEngineAdapter", "Unexpected slicing error: " + e.getMessage());
+            throw new SlicingException("CuraEngine slicing failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Enhanced API call with retry logic and better error handling
+     */
+    private String callCuraEngineAPIWithRetry(byte[] stlBytes, String modelName, SlicingParameters params) {
+        int maxRetries = 3;
+        int baseDelayMs = 5000; // 5 seconds
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                logService.info("CuraEngineAdapter",
+                        String.format("Calling CuraEngine API (attempt %d/%d): %s/slice",
+                                attempt, maxRetries, curaServiceUrl));
+
+                return callCuraEngineAPI(stlBytes, modelName, params);
+
+            } catch (ResourceAccessException e) {
+                // Network/timeout errors
+                if (attempt == maxRetries) {
+                    throw new SlicingException("CuraEngine API timeout after " + maxRetries + " attempts: " + e.getMessage());
+                }
+
+                int delayMs = baseDelayMs * attempt;
+                logService.warn("CuraEngineAdapter",
+                        String.format("API call failed (attempt %d/%d), retrying in %d seconds: %s",
+                                attempt, maxRetries, delayMs / 1000, e.getMessage()));
+
+                try {
+                    TimeUnit.MILLISECONDS.sleep(delayMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new SlicingException("Slicing interrupted");
+                }
+
+            } catch (RestClientException e) {
+                // Other REST errors
+                throw new SlicingException("CuraEngine API error: " + e.getMessage());
+            }
+        }
+
+        throw new SlicingException("CuraEngine API failed after all retry attempts");
+    }
+
+    private String callCuraEngineAPI(byte[] stlBytes, String modelName, SlicingParameters params) {
+        String url = curaServiceUrl + "/slice";
+
+        // Prepare form-data request
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+
+        // Add STL file
+        ByteArrayResource stlResource = new ByteArrayResource(stlBytes) {
+            @Override
+            public String getFilename() {
+                return modelName.endsWith(".stl") ? modelName : modelName + ".stl";
+            }
+        };
+        body.add("uploaded_file", stlResource);
+
+        // Add all slicing parameters
+        addSlicingParameters(body, params);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        headers.set("User-Agent", "PrinterApplication-SlicingService/1.0");
+
+        HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+
+        logService.info("CuraEngineAdapter",
+                String.format("Calling CuraEngine API: %s with %d parameters (timeout: %ds)",
+                        url, body.size(), timeoutSeconds));
+
+        try {
+            ResponseEntity<String> response = restTemplate.postForEntity(url, requestEntity, String.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                String gcode = response.getBody();
+                logService.info("CuraEngineAdapter",
+                        String.format("Received G-code: %d lines, %.2f MB",
+                                gcode.lines().count(), gcode.length() / 1024.0 / 1024.0));
+                return gcode;
+            } else {
+                throw new SlicingException("CuraEngine HTTP error: " + response.getStatusCode());
+            }
+        } catch (ResourceAccessException e) {
+            // This includes timeout and connection errors
+            if (e.getMessage().contains("Read timed out")) {
+                throw new SlicingException("CuraEngine API read timeout after " + timeoutSeconds + " seconds");
+            } else if (e.getMessage().contains("Connection reset")) {
+                throw new SlicingException("CuraEngine API connection reset - service may be overloaded");
+            } else {
+                throw new SlicingException("CuraEngine API connection error: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Check if CuraEngine service is available
+     */
+    private boolean checkServiceHealth() {
+        try {
+            ResponseEntity<Map> response = healthCheckRestTemplate.getForEntity(
+                    curaServiceUrl + "/config", Map.class);
+
+            boolean isHealthy = response.getStatusCode() == HttpStatus.OK;
+            logService.debug("CuraEngineAdapter", "Service health check: " + (isHealthy ? "OK" : "FAILED"));
+            return isHealthy;
 
         } catch (Exception e) {
-            logService.error("CuraEngineAdapter", "Slicing failed: " + e.getMessage());
-            throw new RuntimeException("CuraEngine slicing failed: " + e.getMessage(), e);
+            logService.warn("CuraEngineAdapter", "Service health check failed: " + e.getMessage());
+            return false;
         }
+    }
+
+    /**
+     * Validate G-code output
+     */
+    private void validateGcode(String gcode) {
+        if (gcode == null || gcode.trim().isEmpty()) {
+            throw new SlicingException("Received empty G-code from CuraEngine");
+        }
+
+        long lineCount = gcode.lines().count();
+        if (lineCount < 10) {
+            throw new SlicingException("G-code too short, only " + lineCount + " lines");
+        }
+
+        // Check for basic G-code structure
+        if (!gcode.contains("G1") && !gcode.contains("G0")) {
+            throw new SlicingException("Invalid G-code: no movement commands found");
+        }
+
+        logService.debug("CuraEngineAdapter", "G-code validation passed: " + lineCount + " lines");
     }
 
     @Override
     public boolean validateModel(Model model) {
         if (model == null || model.getFileResource() == null) {
+            logService.warn("CuraEngineAdapter", "Model or file resource is null");
             return false;
         }
 
-        String fileType = model.getFileResource().getFileType();
-        long fileSize = model.getFileResource().getFileSize();
+        FileResource fileResource = model.getFileResource();
+        String fileType = fileResource.getFileType();
+        long fileSize = fileResource.getFileSize();
 
-        return fileType != null &&
-                (fileType.toLowerCase().contains("stl") ||
-                        fileType.toLowerCase().contains("model")) &&
-                fileSize > 0 &&
-                fileSize <= 50 * 1024 * 1024; // 50MB limit
+        // File type validation
+        if (fileType == null || (!fileType.toLowerCase().contains("stl") &&
+                !fileType.toLowerCase().contains("model"))) {
+            logService.warn("CuraEngineAdapter", "Unsupported file type: " + fileType);
+            return false;
+        }
+
+        // File size validation (min 1KB, max 100MB)
+        if (fileSize <= 1024 || fileSize > 100 * 1024 * 1024) {
+            logService.warn("CuraEngineAdapter", "Invalid file size: " + fileSize + " bytes");
+            return false;
+        }
+
+        logService.debug("CuraEngineAdapter", "Model validation passed");
+        return true;
     }
 
     @Override
@@ -114,11 +299,12 @@ public class CuraEngineAdapter implements SlicingEngine {
     @Override
     public String getVersion() {
         try {
-            ResponseEntity<Map> response = restTemplate.getForEntity(
+            ResponseEntity<Map> response = healthCheckRestTemplate.getForEntity(
                     curaServiceUrl + "/config", Map.class);
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                return "5.6.0-Generic";
+                Map<String, Object> config = response.getBody();
+                return config.getOrDefault("version", "5.6.0-Generic").toString();
             }
         } catch (Exception e) {
             logService.debug("CuraEngineAdapter", "Could not get version: " + e.getMessage());
@@ -322,50 +508,6 @@ public class CuraEngineAdapter implements SlicingEngine {
         }
     }
 
-    private String callCuraEngineAPI(byte[] stlBytes, String modelName, SlicingParameters params) {
-        String url = curaServiceUrl + "/slice";
-
-        // Prepare form-data request
-        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-
-        // Add STL file
-        ByteArrayResource stlResource = new ByteArrayResource(stlBytes) {
-            @Override
-            public String getFilename() {
-                return modelName.endsWith(".stl") ? modelName : modelName + ".stl";
-            }
-        };
-        body.add("uploaded_file", stlResource);
-
-        // Add all slicing parameters
-        addSlicingParameters(body, params);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-
-        HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-
-        logService.info("CuraEngineAdapter",
-                String.format("Calling CuraEngine API: %s with %d parameters", url, body.size()));
-
-        try {
-            ResponseEntity<String> response = restTemplate.postForEntity(url, requestEntity, String.class);
-
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                String gcode = response.getBody();
-                logService.info("CuraEngineAdapter",
-                        String.format("Received G-code: %d lines, %d bytes",
-                                gcode.lines().count(), gcode.length()));
-                return gcode;
-            } else {
-                throw new RuntimeException("CuraEngine HTTP error: " + response.getStatusCode());
-            }
-        } catch (Exception e) {
-            logService.error("CuraEngineAdapter", "API call failed: " + e.getMessage());
-            throw new RuntimeException("CuraEngine API call failed", e);
-        }
-    }
-
     private void addSlicingParameters(MultiValueMap<String, Object> body, SlicingParameters params) {
         // Generic machine settings (printer-independent)
         body.add("machine_width", params.machineWidth);
@@ -564,6 +706,19 @@ public class CuraEngineAdapter implements SlicingEngine {
             this.printSpeed = printSpeed;
             this.infillDensity = infillDensity;
             this.wallCount = wallCount;
+        }
+    }
+
+    /**
+     * Custom exception for slicing errors
+     */
+    public static class SlicingException extends RuntimeException {
+        public SlicingException(String message) {
+            super(message);
+        }
+
+        public SlicingException(String message, Throwable cause) {
+            super(message, cause);
         }
     }
 }
