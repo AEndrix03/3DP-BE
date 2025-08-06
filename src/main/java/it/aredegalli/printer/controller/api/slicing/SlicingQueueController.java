@@ -2,7 +2,6 @@ package it.aredegalli.printer.controller.api.slicing;
 
 import it.aredegalli.printer.dto.slicing.queue.SlicingQueueCreateDto;
 import it.aredegalli.printer.dto.slicing.queue.SlicingQueueDto;
-import it.aredegalli.printer.dto.slicing.queue.SlicingRequestDto;
 import it.aredegalli.printer.enums.slicing.SlicingStatus;
 import it.aredegalli.printer.model.slicing.queue.SlicingQueue;
 import it.aredegalli.printer.repository.slicing.queue.SlicingQueueRepository;
@@ -33,12 +32,7 @@ public class SlicingQueueController {
     @GetMapping()
     public ResponseEntity<List<SlicingQueueDto>> getQueueByUserId(@RequestParam() String userId) {
         log.info("SlicingQueueController", "Getting queue for user id: " + userId);
-
         var queue = slicingService.getAllSlicingQueueByCreatedUserId(userId);
-        if (queue == null) {
-            return ResponseEntity.notFound().build();
-        }
-
         return ResponseEntity.ok(queue);
     }
 
@@ -77,25 +71,8 @@ public class SlicingQueueController {
     @GetMapping("/status/{id}")
     public ResponseEntity<SlicingQueueDto> getQueueStatus(@PathVariable UUID id) {
         log.info("SlicingQueueController", "Getting queue status for: " + id);
-
         var queue = slicingService.getQueueStatus(id);
-        if (queue == null) {
-            return ResponseEntity.notFound().build();
-        }
-
         return ResponseEntity.ok(queue);
-    }
-
-    @PostMapping("/slice-now")
-    public ResponseEntity<Map<String, Object>> sliceImmediately(@Valid @RequestBody SlicingRequestDto request) {
-        log.info("SlicingQueueController", "Immediate slicing request for model: " + request.getModelId());
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("status", "not_implemented");
-        response.put("message", "Immediate slicing not yet implemented. Use queue endpoint instead.");
-        response.put("timestamp", Instant.now());
-
-        return ResponseEntity.accepted().body(response);
     }
 
     @GetMapping("/stats")
@@ -116,11 +93,9 @@ public class SlicingQueueController {
             response.put("total_failed", totalFailed);
             response.put("total_all", totalQueued + totalProcessing + totalCompleted + totalFailed);
 
-            // Calculate estimated wait time (simplified)
-            double avgProcessingTimeMinutes = 5.0; // Rough estimate
+            double avgProcessingTimeMinutes = 5.0;
             double estimatedWaitMinutes = totalQueued * avgProcessingTimeMinutes;
             response.put("estimated_wait_time_minutes", estimatedWaitMinutes);
-
             response.put("average_processing_time_minutes", avgProcessingTimeMinutes);
             response.put("status", "success");
             response.put("timestamp", Instant.now());
@@ -197,7 +172,6 @@ public class SlicingQueueController {
 
             String currentStatus = queue.getStatus();
 
-            // Can only cancel queued jobs
             if (SlicingStatus.QUEUED.getCode().equals(currentStatus)) {
                 queue.setStatus(SlicingStatus.FAILED.getCode());
                 queue.setErrorMessage("Cancelled by user");
@@ -252,14 +226,12 @@ public class SlicingQueueController {
 
             String currentStatus = queue.getStatus();
 
-            // Can only retry failed jobs
             if (SlicingStatus.FAILED.getCode().equals(currentStatus)) {
                 queue.setStatus(SlicingStatus.QUEUED.getCode());
                 queue.setErrorMessage(null);
                 queue.setStartedAt(null);
                 queue.setCompletedAt(null);
                 queue.setProgressPercentage(0);
-                // Increase priority slightly for retries
                 queue.setPriority(Math.min(queue.getPriority() + 1, 10));
                 slicingQueueRepository.save(queue);
 
@@ -295,9 +267,6 @@ public class SlicingQueueController {
         }
     }
 
-    /**
-     * Bulk operations for queue management
-     */
     @PostMapping("/bulk/cancel")
     public ResponseEntity<Map<String, Object>> bulkCancelQueued(@RequestParam String userId) {
         log.info("SlicingQueueController", "Bulk cancelling queued jobs for user: " + userId);

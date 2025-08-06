@@ -15,9 +15,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Controller for monitoring and managing slicing queues
- */
 @RestController
 @RequestMapping("/api/slicing/monitoring")
 @RequiredArgsConstructor
@@ -27,9 +24,6 @@ public class SlicingMonitoringController {
     private final SlicingQueueProcessor queueProcessor;
     private final LogService logService;
 
-    /**
-     * Get comprehensive queue statistics
-     */
     @GetMapping("/stats")
     public ResponseEntity<Map<String, Object>> getQueueStatistics() {
         logService.info("SlicingMonitoringController", "Getting comprehensive queue statistics");
@@ -37,7 +31,6 @@ public class SlicingMonitoringController {
         try {
             Map<String, Object> stats = new HashMap<>();
 
-            // Current queue counts
             long queued = slicingQueueRepository.countByStatus(SlicingStatus.QUEUED.getCode());
             long processing = slicingQueueRepository.countByStatus(SlicingStatus.PROCESSING.getCode());
             long completed = slicingQueueRepository.countByStatus(SlicingStatus.COMPLETED.getCode());
@@ -51,7 +44,6 @@ public class SlicingMonitoringController {
                     "total", queued + processing + completed + failed
             ));
 
-            // Processor stats
             stats.put("processor_stats", Map.of(
                     "enabled", queueProcessor.isProcessingEnabled(),
                     "currently_processing", queueProcessor.getCurrentlyProcessing(),
@@ -60,7 +52,6 @@ public class SlicingMonitoringController {
                     "last_processing_time", queueProcessor.getLastProcessingTime()
             ));
 
-            // Performance metrics
             stats.put("performance", Map.of(
                     "success_rate", calculateSuccessRate(completed, failed),
                     "queue_health", queued < 10 ? "healthy" : queued < 50 ? "warning" : "critical"
@@ -83,9 +74,6 @@ public class SlicingMonitoringController {
         }
     }
 
-    /**
-     * Get detailed health information
-     */
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> getDetailedHealth() {
         logService.info("SlicingMonitoringController", "Getting detailed health information");
@@ -112,9 +100,6 @@ public class SlicingMonitoringController {
         }
     }
 
-    /**
-     * Get queue summary for dashboard
-     */
     @GetMapping("/summary")
     public ResponseEntity<Map<String, Object>> getQueueSummary() {
         logService.debug("SlicingMonitoringController", "Getting queue summary");
@@ -138,9 +123,6 @@ public class SlicingMonitoringController {
         }
     }
 
-    /**
-     * Get processing metrics for performance monitoring
-     */
     @GetMapping("/metrics")
     public ResponseEntity<Map<String, Object>> getProcessingMetrics() {
         logService.debug("SlicingMonitoringController", "Getting processing metrics");
@@ -148,12 +130,10 @@ public class SlicingMonitoringController {
         try {
             Map<String, Object> metrics = new HashMap<>();
 
-            // Basic counters
             metrics.put("total_processed", queueProcessor.getProcessedCount());
             metrics.put("total_failed", queueProcessor.getFailedCount());
             metrics.put("currently_processing", queueProcessor.getCurrentlyProcessing());
 
-            // Calculate rates (approximate)
             long totalProcessed = queueProcessor.getProcessedCount();
             long totalFailed = queueProcessor.getFailedCount();
             double successRate = calculateSuccessRate(totalProcessed, totalFailed);
@@ -161,7 +141,6 @@ public class SlicingMonitoringController {
             metrics.put("success_rate", successRate);
             metrics.put("failure_rate", 100.0 - successRate);
 
-            // Timestamps
             metrics.put("last_processing_time", queueProcessor.getLastProcessingTime());
             metrics.put("timestamp", Instant.now());
 
@@ -173,9 +152,6 @@ public class SlicingMonitoringController {
         }
     }
 
-    /**
-     * Administrative endpoint to get failed jobs info
-     */
     @GetMapping("/failed-jobs")
     public ResponseEntity<Map<String, Object>> getFailedJobsInfo() {
         logService.info("SlicingMonitoringController", "Getting failed jobs information");
@@ -196,8 +172,6 @@ public class SlicingMonitoringController {
         }
     }
 
-    // Helper methods
-
     private double calculateSuccessRate(long successful, long failed) {
         long total = successful + failed;
         if (total == 0) return 100.0;
@@ -206,11 +180,11 @@ public class SlicingMonitoringController {
 
     private String determineHealthStatus(long queued, long processing) {
         if (processing == 0 && queued > 0) {
-            return "warning"; // Jobs queued but none processing
+            return "warning";
         } else if (queued > 50) {
-            return "critical"; // Too many queued jobs
+            return "critical";
         } else if (queued > 10) {
-            return "warning"; // Moderate backlog
+            return "warning";
         } else {
             return "healthy";
         }

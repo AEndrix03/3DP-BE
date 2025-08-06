@@ -1,4 +1,3 @@
-# application.yml - Enhanced with CuraEngine Integration (CLEAN VERSION)
 spring:
   application:
     name: 3D Printer BE
@@ -51,7 +50,6 @@ spring:
         thread-name-prefix: "printer-async-"
         keep-alive: "60s"
 
-# SSL Configuration (HTTPS enabled with keystore)
 server:
   address: 0.0.0.0
   port: 8443
@@ -65,7 +63,6 @@ server:
   http2:
     enabled: true
 
-# Logging Configuration
 logging:
   level:
     root: WARN
@@ -78,7 +75,6 @@ logging:
     console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
-# CORS Configuration
 security:
   cors:
     allowed-origins: "*"
@@ -91,7 +87,6 @@ security:
   crypto:
     aes-secret-key: ${PRINTER_AES_KEY}
 
-# Actuator Configuration
 management:
   endpoints:
     web:
@@ -113,7 +108,6 @@ management:
     diskspace:
       enabled: true
 
-# Swagger OpenAPI Configuration
 springdoc:
   api-docs:
     enabled: true
@@ -125,12 +119,10 @@ springdoc:
     tagsSorter: alpha
   show-actuator: true
 
-# HMAC Configuration
 hmac:
   secret:
     key: ${HMAC_SECRET_KEY}
 
-# MinIO/S3 Storage Configuration
 minio:
   endpoint: ${MINIO_ENDPOINT}
   access-key: ${MINIO_ACCESS_KEY}
@@ -139,76 +131,38 @@ minio:
   region: ${MINIO_REGION:us-east-1}
   bucket-name: ${MINIO_BUCKET_NAME:3d-printer-files}
 
-# External Services Configuration
 external-services:
   stl2glb:
     url: ${STL2GLB_SERVICE_URL:http://dev.aredegalli.it:9002}
     timeout: 30s
     retry-attempts: 3
 
-# Legacy compatibility for Feign clients
 stl2glb:
   url: ${STL2GLB_SERVICE_URL:http://dev.aredegalli.it:9002}
 
-# ======================================
-# SLICING ENGINE CONFIGURATION - CONFIGURAZIONE SEMPLIFICATA PER CURA REST
-# ======================================
 slicing:
-  # General slicing settings
-  max-concurrent: ${SLICING_MAX_CONCURRENT:2}
-  timeout-minutes: ${SLICING_TIMEOUT_MINUTES:30}
-  default-engine: ${SLICING_DEFAULT_ENGINE:CuraEngine}  # Usa CuraEngine come default
+  default-engine: ${SLICING_DEFAULT_ENGINE:CuraEngine}
 
-  # Engine selection configuration (semplificata)
-  engine-selection:
-    enabled: true
-    fallback-engine: DefaultSlicer
+  queue:
+    processing:
+      enabled: ${SLICING_PROCESSING_ENABLED:true}
+      max-concurrent: ${SLICING_MAX_CONCURRENT:2}
+      batch-size: ${SLICING_BATCH_SIZE:5}
+    stale-timeout-minutes: ${SLICING_STALE_TIMEOUT:30}
 
-  # Individual engine configurations (solo quelli necessari)
   engines:
-    # CuraEngine REST API - PRINCIPALE
     external:
       enabled: ${SLICING_EXTERNAL_ENABLED:true}
-      service-url: ${EXTERNAL_SLICER_URL:http://dev.aredegalli.it:4075}  # Porta corretta per il tuo docker-compose
-      api-key: ${EXTERNAL_SLICER_API_KEY:}
+      service-url: ${EXTERNAL_SLICER_URL:http://dev.aredegalli.it:4075}
       timeout-seconds: 300
-      priority: 1  # Priorità massima
-      supported-formats: [ "stl", "obj", "3mf" ]
+      connection-timeout-seconds: 30
 
-    # Default/Fallback Engine (solo per emergenze)
-    default:
-      enabled: true
-      timeout-seconds: 60
-      priority: 99  # Priorità minima
-      supported-formats: [ "stl" ]
+  default:
+    build-volume:
+      width: 200
+      depth: 200
+      height: 200
 
-    # DISABILITATI - Non più necessari
-    prusa:
-      enabled: false
-    cura:
-      enabled: false
-    docker:
-      enabled: false
-
-  # Quality profiles mapping (manteniamo per compatibilità)
-  quality-profiles:
-    draft:
-      layer-height: 0.3
-      speed-multiplier: 1.5
-      infill-density: 10
-      print-speed: 80
-    standard:
-      layer-height: 0.2
-      speed-multiplier: 1.0
-      infill-density: 20
-      print-speed: 60
-    high:
-      layer-height: 0.15
-      speed-multiplier: 0.8
-      infill-density: 25
-      print-speed: 50
-
-  # Material settings (manteniamo)
   materials:
     pla:
       density-g-cm3: 1.25
@@ -225,17 +179,3 @@ slicing:
       cost-per-kg: 32.0
       default-extruder-temp: 230
       default-bed-temp: 70
-
-  # Error handling e retry (semplificato)
-  error-handling:
-    max-retries: 2
-    retry-delay-seconds: 30
-    fallback-to-default: true
-    log-failed-attempts: true
-
-  # Cleanup configuration
-  cleanup:
-    temp-files-retention-hours: 24
-    failed-job-retention-days: 7
-    auto-cleanup-enabled: true
-    cleanup-schedule: "0 0 2 * * ?" # Daily at 2 AM

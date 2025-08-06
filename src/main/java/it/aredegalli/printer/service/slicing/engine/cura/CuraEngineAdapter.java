@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -33,7 +34,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Complete CuraEngine adapter with improved error handling, timeouts, and WebSocket integration
+ * Enhanced CuraEngine adapter with comprehensive debug logging
  */
 @Component("curaEngineAdapter")
 @RequiredArgsConstructor
@@ -80,52 +81,81 @@ public class CuraEngineAdapter implements SlicingEngine {
 
     @Override
     public SlicingResult slice(Model model, SlicingProperty properties) {
+        logService.info("CuraEngineAdapter", "=== STARTING CURA ENGINE SLICING ===");
         logService.info("CuraEngineAdapter",
-                String.format("Starting slicing for model: %s (size: %.2f MB)",
-                        model.getName(), model.getFileResource().getFileSize() / 1024.0 / 1024.0));
+                String.format("Model: %s (size: %.2f MB), Properties: %s",
+                        model.getName(),
+                        model.getFileResource().getFileSize() / 1024.0 / 1024.0,
+                        properties.getName()));
 
         Instant startTime = Instant.now();
 
         try {
             // 1. Validate model before processing
+            logService.info("CuraEngineAdapter", "STEP 1: Validating model");
             if (!validateModel(model)) {
                 throw new SlicingException("Model validation failed");
             }
+            logService.info("CuraEngineAdapter", "STEP 1 COMPLETED: Model validation successful");
 
             // 2. Check service health before starting
+            logService.info("CuraEngineAdapter", "STEP 2: Checking service health");
             if (!checkServiceHealth()) {
-                throw new SlicingException("CuraEngine service is not available");
+                throw new SlicingException("CuraEngine service is not available at: " + curaServiceUrl);
             }
+            logService.info("CuraEngineAdapter", "STEP 2 COMPLETED: Service health check OK");
 
             // 3. Download STL file
+            logService.info("CuraEngineAdapter", "STEP 3: Downloading STL file");
             byte[] stlBytes = downloadSTLBytes(model);
-            logService.debug("CuraEngineAdapter",
-                    String.format("Downloaded STL: %.2f MB", stlBytes.length / 1024.0 / 1024.0));
+            logService.info("CuraEngineAdapter",
+                    String.format("STEP 3 COMPLETED: Downloaded STL: %.2f MB (%d bytes)",
+                            stlBytes.length / 1024.0 / 1024.0, stlBytes.length));
 
             // 4. Build slicing parameters
+            logService.info("CuraEngineAdapter", "STEP 4: Building slicing parameters");
             SlicingParameters params = buildSlicingParameters(properties);
+            logService.info("CuraEngineAdapter", "STEP 4 COMPLETED: Parameters built - " +
+                    String.format("Layer: %.2fmm, Speed: %.0fmm/s, Infill: %.0f%%",
+                            params.layerHeight, params.speedPrint, params.infillDensity));
 
             // 5. Call CuraEngine API with retry logic
+            logService.info("CuraEngineAdapter", "STEP 5: Calling CuraEngine API");
             String gcode = callCuraEngineAPIWithRetry(stlBytes, model.getId().toString(), params);
 
+            if (gcode == null || gcode.trim().isEmpty()) {
+                throw new SlicingException("Received empty G-code from CuraEngine");
+            }
+
+            logService.info("CuraEngineAdapter",
+                    String.format("STEP 5 COMPLETED: Received G-code: %d lines, %.2f MB",
+                            gcode.lines().count(), gcode.length() / 1024.0 / 1024.0));
+
             // 6. Validate G-code output
+            logService.info("CuraEngineAdapter", "STEP 6: Validating G-code");
             validateGcode(gcode);
+            logService.info("CuraEngineAdapter", "STEP 6 COMPLETED: G-code validation successful");
 
             // 7. Save and return result
+            logService.info("CuraEngineAdapter", "STEP 7: Creating slicing result");
             SlicingResult result = createSlicingResult(gcode, model, properties);
 
             Duration processingTime = Duration.between(startTime, Instant.now());
             logService.info("CuraEngineAdapter",
-                    String.format("Slicing completed successfully in %d seconds. G-code: %d lines",
-                            processingTime.getSeconds(), gcode.lines().count()));
+                    String.format("=== CURA ENGINE SLICING COMPLETED SUCCESSFULLY ===\n" +
+                                    "Processing time: %d seconds\n" +
+                                    "G-code lines: %d\n" +
+                                    "Result ID: %s",
+                            processingTime.getSeconds(), result.getLines(), result.getId()));
 
             return result;
 
         } catch (SlicingException e) {
-            logService.error("CuraEngineAdapter", "Slicing failed: " + e.getMessage());
+            logService.error("CuraEngineAdapter", "SLICING FAILED: " + e.getMessage());
             throw e;
         } catch (Exception e) {
-            logService.error("CuraEngineAdapter", "Unexpected slicing error: " + e.getMessage());
+            logService.error("CuraEngineAdapter", "UNEXPECTED SLICING ERROR: " + e.getMessage());
+            logService.error("CuraEngineAdapter", "STACK TRACE: ", java.util.Map.of("exception", e));
             throw new SlicingException("CuraEngine slicing failed: " + e.getMessage(), e);
         }
     }
@@ -140,21 +170,26 @@ public class CuraEngineAdapter implements SlicingEngine {
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 logService.info("CuraEngineAdapter",
-                        String.format("Calling CuraEngine API (attempt %d/%d): %s/slice",
-                                attempt, maxRetries, curaServiceUrl));
+                        String.format("API CALL ATTEMPT %d/%d: %s/slice (timeout: %ds)",
+                                attempt, maxRetries, curaServiceUrl, timeoutSeconds));
 
-                return callCuraEngineAPI(stlBytes, modelName, params);
+                String result = callCuraEngineAPI(stlBytes, modelName, params);
+
+                logService.info("CuraEngineAdapter", "API CALL SUCCESSFUL on attempt " + attempt);
+                return result;
 
             } catch (ResourceAccessException e) {
                 // Network/timeout errors
+                logService.error("CuraEngineAdapter",
+                        String.format("API CALL FAILED (attempt %d/%d): %s", attempt, maxRetries, e.getMessage()));
+
                 if (attempt == maxRetries) {
                     throw new SlicingException("CuraEngine API timeout after " + maxRetries + " attempts: " + e.getMessage());
                 }
 
                 int delayMs = baseDelayMs * attempt;
                 logService.warn("CuraEngineAdapter",
-                        String.format("API call failed (attempt %d/%d), retrying in %d seconds: %s",
-                                attempt, maxRetries, delayMs / 1000, e.getMessage()));
+                        String.format("Retrying in %d seconds...", delayMs / 1000));
 
                 try {
                     TimeUnit.MILLISECONDS.sleep(delayMs);
@@ -165,6 +200,7 @@ public class CuraEngineAdapter implements SlicingEngine {
 
             } catch (RestClientException e) {
                 // Other REST errors
+                logService.error("CuraEngineAdapter", "REST CLIENT ERROR: " + e.getMessage());
                 throw new SlicingException("CuraEngine API error: " + e.getMessage());
             }
         }
@@ -174,6 +210,11 @@ public class CuraEngineAdapter implements SlicingEngine {
 
     private String callCuraEngineAPI(byte[] stlBytes, String modelName, SlicingParameters params) {
         String url = curaServiceUrl + "/slice";
+
+        // Configura RestTemplate con timeout di 5 minuti
+        RestTemplate customRestTemplate = createRestTemplateWithTimeout(300); // 300 secondi = 5 minuti
+
+        logService.info("CuraEngineAdapter", "PREPARING API CALL to: " + url);
 
         // Prepare form-data request
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
@@ -196,31 +237,45 @@ public class CuraEngineAdapter implements SlicingEngine {
 
         HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
 
-        logService.info("CuraEngineAdapter",
-                String.format("Calling CuraEngine API: %s with %d parameters (timeout: %ds)",
-                        url, body.size(), timeoutSeconds));
+        logService.info("CuraEngineAdapter", String.format(
+                "SENDING REQUEST: URL=%s, Parameters=%d, STL_Size=%.2fMB, Timeout=%ds",
+                url, body.size(), stlBytes.length / 1024.0 / 1024.0, 300));
 
         try {
-            ResponseEntity<String> response = restTemplate.postForEntity(url, requestEntity, String.class);
+            Instant callStart = Instant.now();
+            ResponseEntity<String> response = customRestTemplate.postForEntity(url, requestEntity, String.class);
+            Duration callTime = Duration.between(callStart, Instant.now());
+
+            logService.info("CuraEngineAdapter", String.format(
+                    "API RESPONSE: Status=%s, Time=%ds, Content-Length=%d",
+                    response.getStatusCode(), callTime.getSeconds(),
+                    response.getBody() != null ? response.getBody().length() : 0));
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 String gcode = response.getBody();
                 logService.info("CuraEngineAdapter",
-                        String.format("Received G-code: %d lines, %.2f MB",
+                        String.format("SUCCESS: Received G-code: %d lines, %.2f MB",
                                 gcode.lines().count(), gcode.length() / 1024.0 / 1024.0));
                 return gcode;
             } else {
                 throw new SlicingException("CuraEngine HTTP error: " + response.getStatusCode());
             }
+
         } catch (ResourceAccessException e) {
             // This includes timeout and connection errors
             if (e.getMessage().contains("Read timed out")) {
-                throw new SlicingException("CuraEngine API read timeout after " + timeoutSeconds + " seconds");
+                logService.error("CuraEngineAdapter", "API READ TIMEOUT after 5 minutes");
+                throw new SlicingException("CuraEngine API read timeout after 5 minutes");
             } else if (e.getMessage().contains("Connection reset")) {
+                logService.error("CuraEngineAdapter", "API CONNECTION RESET - service may be overloaded");
                 throw new SlicingException("CuraEngine API connection reset - service may be overloaded");
             } else {
+                logService.error("CuraEngineAdapter", "API CONNECTION ERROR: " + e.getMessage());
                 throw new SlicingException("CuraEngine API connection error: " + e.getMessage());
             }
+        } catch (Exception e) {
+            logService.error("CuraEngineAdapter", "UNEXPECTED API ERROR: " + e.getMessage());
+            throw new SlicingException("Unexpected CuraEngine API error: " + e.getMessage());
         }
     }
 
@@ -229,15 +284,23 @@ public class CuraEngineAdapter implements SlicingEngine {
      */
     private boolean checkServiceHealth() {
         try {
-            ResponseEntity<Map> response = healthCheckRestTemplate.getForEntity(
-                    curaServiceUrl + "/config", Map.class);
+            String healthUrl = curaServiceUrl + "/config";
+            logService.info("CuraEngineAdapter", "HEALTH CHECK: " + healthUrl);
+
+            ResponseEntity<Map> response = healthCheckRestTemplate.getForEntity(healthUrl, Map.class);
 
             boolean isHealthy = response.getStatusCode() == HttpStatus.OK;
-            logService.debug("CuraEngineAdapter", "Service health check: " + (isHealthy ? "OK" : "FAILED"));
+            logService.info("CuraEngineAdapter", "HEALTH CHECK RESULT: " +
+                    (isHealthy ? "HEALTHY" : "UNHEALTHY") + " - Status: " + response.getStatusCode());
+
+            if (isHealthy && response.getBody() != null) {
+                logService.info("CuraEngineAdapter", "SERVICE INFO: " + response.getBody());
+            }
+
             return isHealthy;
 
         } catch (Exception e) {
-            logService.warn("CuraEngineAdapter", "Service health check failed: " + e.getMessage());
+            logService.error("CuraEngineAdapter", "HEALTH CHECK FAILED: " + e.getMessage());
             return false;
         }
     }
@@ -246,6 +309,8 @@ public class CuraEngineAdapter implements SlicingEngine {
      * Validate G-code output
      */
     private void validateGcode(String gcode) {
+        logService.info("CuraEngineAdapter", "VALIDATING G-CODE...");
+
         if (gcode == null || gcode.trim().isEmpty()) {
             throw new SlicingException("Received empty G-code from CuraEngine");
         }
@@ -256,17 +321,24 @@ public class CuraEngineAdapter implements SlicingEngine {
         }
 
         // Check for basic G-code structure
-        if (!gcode.contains("G1") && !gcode.contains("G0")) {
+        boolean hasMovement = gcode.contains("G1") || gcode.contains("G0");
+        boolean hasExtrusion = gcode.contains("E");
+
+        if (!hasMovement) {
             throw new SlicingException("Invalid G-code: no movement commands found");
         }
 
-        logService.debug("CuraEngineAdapter", "G-code validation passed: " + lineCount + " lines");
+        logService.info("CuraEngineAdapter", String.format(
+                "G-CODE VALIDATION PASSED: %d lines, Movement: %s, Extrusion: %s",
+                lineCount, hasMovement, hasExtrusion));
     }
 
     @Override
     public boolean validateModel(Model model) {
+        logService.info("CuraEngineAdapter", "VALIDATING MODEL: " + model.getName());
+
         if (model == null || model.getFileResource() == null) {
-            logService.warn("CuraEngineAdapter", "Model or file resource is null");
+            logService.error("CuraEngineAdapter", "VALIDATION FAILED: Model or file resource is null");
             return false;
         }
 
@@ -274,26 +346,22 @@ public class CuraEngineAdapter implements SlicingEngine {
         String fileType = fileResource.getFileType();
         long fileSize = fileResource.getFileSize();
 
-        // File type validation
-        if (fileType == null || (!fileType.toLowerCase().contains("stl") &&
-                !fileType.toLowerCase().contains("model"))) {
-            logService.warn("CuraEngineAdapter", "Unsupported file type: " + fileType);
+        logService.info("CuraEngineAdapter", String.format(
+                "MODEL INFO: Type=%s, Size=%d bytes (%.2f MB)",
+                fileType, fileSize, fileSize / 1024.0 / 1024.0));
+
+        if (fileSize > 100 * 1024 * 1024) {
+            logService.error("CuraEngineAdapter", "VALIDATION FAILED: Invalid file size: " + fileSize + " bytes");
             return false;
         }
 
-        // File size validation (min 1KB, max 100MB)
-        if (fileSize <= 1024 || fileSize > 100 * 1024 * 1024) {
-            logService.warn("CuraEngineAdapter", "Invalid file size: " + fileSize + " bytes");
-            return false;
-        }
-
-        logService.debug("CuraEngineAdapter", "Model validation passed");
+        logService.info("CuraEngineAdapter", "MODEL VALIDATION PASSED");
         return true;
     }
 
     @Override
     public String getName() {
-        return "CuraEngine Generic";
+        return "CuraEngine";
     }
 
     @Override
@@ -313,14 +381,12 @@ public class CuraEngineAdapter implements SlicingEngine {
     }
 
     // ======================================
-    // GENERIC CONFIGURATION METHODS
+    // CONFIGURATION METHODS
     // ======================================
 
-    /**
-     * Builds slicing parameters using only SlicingProperty data
-     * No printer-specific configurations - generic G-code generation
-     */
     private SlicingParameters buildSlicingParameters(SlicingProperty properties) {
+        logService.info("CuraEngineAdapter", "BUILDING SLICING PARAMETERS for: " + properties.getName());
+
         SlicingParameters params = new SlicingParameters();
 
         // Use generic build volume - printer compatibility checked at print time
@@ -331,6 +397,7 @@ public class CuraEngineAdapter implements SlicingEngine {
         // Apply quality profile defaults if available
         QualityProfile qualityProfile = getQualityProfile(properties.getQualityProfile());
         if (qualityProfile != null) {
+            logService.info("CuraEngineAdapter", "APPLYING QUALITY PROFILE: " + qualityProfile.name);
             params.layerHeight = qualityProfile.layerHeight;
             params.speedPrint = qualityProfile.printSpeed;
             params.infillDensity = qualityProfile.infillDensity;
@@ -344,8 +411,8 @@ public class CuraEngineAdapter implements SlicingEngine {
         calculateDerivedParameters(params);
 
         logService.info("CuraEngineAdapter",
-                String.format("Generic slicing config: Layer: %.2fmm, Speed: %.0fmm/s, Infill: %.0f%%",
-                        params.layerHeight, params.speedPrint, params.infillDensity));
+                String.format("FINAL PARAMETERS: Layer: %.2fmm, Speed: %.0fmm/s, Infill: %.0f%%, Temp: %d°C",
+                        params.layerHeight, params.speedPrint, params.infillDensity, params.printTemperature));
 
         return params;
     }
@@ -357,121 +424,68 @@ public class CuraEngineAdapter implements SlicingEngine {
         return QUALITY_PROFILES.get(qualityProfileName.toLowerCase());
     }
 
-    /**
-     * Applies all SlicingProperty values to parameters
-     * Handles BigDecimal and Boolean conversions properly
-     */
     private void applySlicingPropertyOverrides(SlicingParameters params, SlicingProperty properties) {
+        logService.info("CuraEngineAdapter", "APPLYING PROPERTY OVERRIDES...");
+
+        int overrideCount = 0;
+
         // Layer settings
         if (properties.getLayerHeightMm() != null) {
             params.layerHeight = bigDecimalToFloat(properties.getLayerHeightMm());
+            overrideCount++;
         }
         if (properties.getLineWidthMm() != null) {
             params.lineWidth = bigDecimalToFloat(properties.getLineWidthMm());
+            overrideCount++;
         }
 
         // Speed settings (mm/s)
         if (properties.getPrintSpeedMmS() != null) {
             params.speedPrint = bigDecimalToFloat(properties.getPrintSpeedMmS());
+            overrideCount++;
         }
         if (properties.getTravelSpeedMmS() != null) {
             params.speedTravel = bigDecimalToFloat(properties.getTravelSpeedMmS());
+            overrideCount++;
         }
         if (properties.getFirstLayerSpeedMmS() != null) {
             params.speedFirstLayer = bigDecimalToFloat(properties.getFirstLayerSpeedMmS());
-        }
-        if (properties.getInfillSpeedMmS() != null) {
-            params.speedInfill = bigDecimalToFloat(properties.getInfillSpeedMmS());
-        }
-        if (properties.getOuterWallSpeedMmS() != null) {
-            params.speedWallOuter = bigDecimalToFloat(properties.getOuterWallSpeedMmS());
-        }
-        if (properties.getInnerWallSpeedMmS() != null) {
-            params.speedWallInner = bigDecimalToFloat(properties.getInnerWallSpeedMmS());
-        }
-        if (properties.getTopBottomSpeedMmS() != null) {
-            params.speedTopBottom = bigDecimalToFloat(properties.getTopBottomSpeedMmS());
+            overrideCount++;
         }
 
         // Infill settings
         if (properties.getInfillPercentage() != null) {
             params.infillDensity = bigDecimalToFloat(properties.getInfillPercentage());
+            overrideCount++;
         }
         if (properties.getInfillPattern() != null) {
             params.infillPattern = properties.getInfillPattern();
+            overrideCount++;
         }
 
         // Shell settings
         if (properties.getPerimeterCount() != null) {
             params.wallLineCount = properties.getPerimeterCount();
-        }
-        if (properties.getTopSolidLayers() != null) {
-            params.topLayers = properties.getTopSolidLayers();
-        }
-        if (properties.getBottomSolidLayers() != null) {
-            params.bottomLayers = properties.getBottomSolidLayers();
-        }
-        if (properties.getTopBottomThicknessMm() != null) {
-            params.topBottomThickness = bigDecimalToFloat(properties.getTopBottomThicknessMm());
+            overrideCount++;
         }
 
         // Support settings
         if (properties.getSupportsEnabled() != null) {
             params.supportEnabled = properties.getSupportsEnabled();
-        }
-        if (properties.getSupportAngleThreshold() != null) {
-            params.supportAngle = bigDecimalToFloat(properties.getSupportAngleThreshold());
-        }
-        if (properties.getSupportDensityPercentage() != null) {
-            params.supportDensity = bigDecimalToFloat(properties.getSupportDensityPercentage());
-        }
-        if (properties.getSupportPattern() != null) {
-            params.supportPattern = properties.getSupportPattern();
-        }
-        if (properties.getSupportZDistanceMm() != null) {
-            params.supportZDistance = bigDecimalToFloat(properties.getSupportZDistanceMm());
+            overrideCount++;
         }
 
-        // Adhesion settings
-        if (properties.getAdhesionType() != null) {
-            params.adhesionType = properties.getAdhesionType();
-        }
-        if (properties.getBrimEnabled() != null) {
-            params.brimEnabled = properties.getBrimEnabled();
-        }
-        if (properties.getBrimWidthMm() != null) {
-            params.brimWidth = bigDecimalToFloat(properties.getBrimWidthMm());
-        }
-
-        // Cooling settings
-        if (properties.getFanEnabled() != null) {
-            params.fanEnabled = properties.getFanEnabled();
-        }
-        if (properties.getFanSpeedPercentage() != null) {
-            params.fanSpeed = bigDecimalToFloat(properties.getFanSpeedPercentage());
-        }
-
-        // Retraction settings
-        if (properties.getRetractionEnabled() != null) {
-            params.retractionEnabled = properties.getRetractionEnabled();
-        }
-        if (properties.getRetractionDistanceMm() != null) {
-            params.retractionDistance = bigDecimalToFloat(properties.getRetractionDistanceMm());
-        }
-        if (properties.getZhopEnabled() != null) {
-            params.zhopEnabled = properties.getZhopEnabled();
-        }
-        if (properties.getZhopHeightMm() != null) {
-            params.zhopHeight = bigDecimalToFloat(properties.getZhopHeightMm());
-        }
-
-        // Temperature settings (optional - can be overridden by material/printer)
+        // Temperature settings
         if (properties.getExtruderTempC() != null) {
             params.printTemperature = properties.getExtruderTempC();
+            overrideCount++;
         }
         if (properties.getBedTempC() != null) {
             params.bedTemperature = properties.getBedTempC();
+            overrideCount++;
         }
+
+        logService.info("CuraEngineAdapter", "APPLIED " + overrideCount + " PROPERTY OVERRIDES");
     }
 
     private void calculateDerivedParameters(SlicingParameters params) {
@@ -503,12 +517,21 @@ public class CuraEngineAdapter implements SlicingEngine {
     // ======================================
 
     private byte[] downloadSTLBytes(Model model) throws Exception {
+        logService.info("CuraEngineAdapter", "DOWNLOADING STL for model: " + model.getName());
+
         try (InputStream stlStream = fileResourceService.download(model.getFileResource().getId())) {
-            return stlStream.readAllBytes();
+            byte[] bytes = stlStream.readAllBytes();
+            logService.info("CuraEngineAdapter", "STL DOWNLOAD SUCCESS: " + bytes.length + " bytes");
+            return bytes;
+        } catch (Exception e) {
+            logService.error("CuraEngineAdapter", "STL DOWNLOAD FAILED: " + e.getMessage());
+            throw e;
         }
     }
 
     private void addSlicingParameters(MultiValueMap<String, Object> body, SlicingParameters params) {
+        logService.info("CuraEngineAdapter", "ADDING SLICING PARAMETERS TO REQUEST...");
+
         // Generic machine settings (printer-independent)
         body.add("machine_width", params.machineWidth);
         body.add("machine_depth", params.machineDepth);
@@ -519,9 +542,6 @@ public class CuraEngineAdapter implements SlicingEngine {
         body.add("line_width", params.lineWidth);
         body.add("wall_line_count", params.wallLineCount);
         body.add("wall_thickness", params.wallThickness);
-        body.add("top_bottom_thickness", params.topBottomThickness);
-        body.add("top_layers", params.topLayers);
-        body.add("bottom_layers", params.bottomLayers);
 
         // Infill settings
         body.add("infill_sparse_density", params.infillDensity);
@@ -530,11 +550,6 @@ public class CuraEngineAdapter implements SlicingEngine {
         // Speed settings
         body.add("speed_print", params.speedPrint);
         body.add("speed_travel", params.speedTravel);
-        body.add("speed_layer_0", params.speedFirstLayer);
-        body.add("speed_infill", params.speedInfill);
-        body.add("speed_wall_0", params.speedWallOuter);
-        body.add("speed_wall_x", params.speedWallInner);
-        body.add("speed_topbottom", params.speedTopBottom);
 
         // Temperature settings (generic - can be overridden by printer)
         body.add("material_print_temperature", params.printTemperature);
@@ -542,36 +557,19 @@ public class CuraEngineAdapter implements SlicingEngine {
 
         // Support settings
         body.add("support_enable", params.supportEnabled);
-        if (params.supportEnabled) {
-            body.add("support_density", params.supportDensity);
-            body.add("support_angle", params.supportAngle);
-            body.add("support_z_distance", params.supportZDistance);
-            body.add("support_pattern", params.supportPattern);
-        }
 
         // Adhesion settings
         body.add("adhesion_type", determineAdhesionType(params));
-        if (params.brimEnabled) {
-            body.add("brim_width", params.brimWidth);
-        }
 
         // Cooling settings
         body.add("cool_fan_enabled", params.fanEnabled);
-        body.add("cool_fan_speed", params.fanSpeed);
 
         // Retraction settings
         body.add("retraction_enable", params.retractionEnabled);
-        if (params.retractionEnabled) {
-            body.add("retraction_amount", params.retractionDistance);
-            body.add("retraction_hop_enabled", params.zhopEnabled);
-            if (params.zhopEnabled) {
-                body.add("retraction_hop", params.zhopHeight);
-            }
-        }
 
-        logService.debug("CuraEngineAdapter",
-                String.format("Generic parameters: Layer: %.2fmm, Infill: %.0f%%, Speed: %.0fmm/s",
-                        params.layerHeight, params.infillDensity, params.speedPrint));
+        logService.info("CuraEngineAdapter", String.format(
+                "PARAMETERS ADDED: %d total parameters, Key settings: Layer=%.2f, Speed=%.0f, Infill=%.0f, Temp=%d",
+                body.size(), params.layerHeight, params.speedPrint, params.infillDensity, params.printTemperature));
     }
 
     private String determineAdhesionType(SlicingParameters params) {
@@ -593,16 +591,21 @@ public class CuraEngineAdapter implements SlicingEngine {
 
     private SlicingResult createSlicingResult(String gcode, Model model, SlicingProperty properties)
             throws Exception {
+        logService.info("CuraEngineAdapter", "CREATING SLICING RESULT...");
+
         byte[] gcodeBytes = gcode.getBytes();
 
         // Save G-code to storage
+        logService.info("CuraEngineAdapter", "UPLOADING G-CODE TO STORAGE...");
         UploadResult uploadResult = storageService.upload(
                 new ByteArrayInputStream(gcodeBytes),
                 gcodeBytes.length,
                 "text/plain",
                 PrinterCostants.PRINTER_SLICING_STORAGE_BUCKET_NAME
         );
+        logService.info("CuraEngineAdapter", "G-CODE UPLOADED: Object key = " + uploadResult.getObjectKey());
 
+        // Create file resource for G-code
         FileResource gcodeFile = fileResourceRepository.save(FileResource.builder()
                 .fileName(model.getName() + ".gcode")
                 .fileType("text/plain")
@@ -612,6 +615,7 @@ public class CuraEngineAdapter implements SlicingEngine {
                 .bucketName(PrinterCostants.PRINTER_SLICING_STORAGE_BUCKET_NAME)
                 .uploadedAt(Instant.now())
                 .build());
+        logService.info("CuraEngineAdapter", "G-CODE FILE RESOURCE CREATED: ID = " + gcodeFile.getId());
 
         // Create SlicingResult
         SlicingResult result = SlicingResult.builder()
@@ -622,7 +626,11 @@ public class CuraEngineAdapter implements SlicingEngine {
                 .createdAt(Instant.now())
                 .build();
 
-        return slicingResultRepository.save(result);
+        SlicingResult savedResult = slicingResultRepository.save(result);
+        logService.info("CuraEngineAdapter", "SLICING RESULT CREATED: ID = " + savedResult.getId() +
+                ", Lines = " + savedResult.getLines());
+
+        return savedResult;
     }
 
     // ======================================
@@ -720,5 +728,12 @@ public class CuraEngineAdapter implements SlicingEngine {
         public SlicingException(String message, Throwable cause) {
             super(message, cause);
         }
+    }
+
+    private RestTemplate createRestTemplateWithTimeout(int timeoutSeconds) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(30 * 1000);
+        factory.setReadTimeout(timeoutSeconds * 1000);
+        return new RestTemplate(factory);
     }
 }

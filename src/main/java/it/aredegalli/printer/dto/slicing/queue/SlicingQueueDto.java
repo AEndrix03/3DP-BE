@@ -10,11 +10,10 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class SlicingQueueDto {
-
     private UUID id;
     private UUID modelId;
     private UUID slicingPropertyId;
@@ -24,6 +23,8 @@ public class SlicingQueueDto {
     private Instant startedAt;
     private Instant completedAt;
     private String errorMessage;
-    private Integer progressPercentage;
     private String createdByUserId;
+
+    private Long estimatedTimeRemaining;
+    private String currentStep;
 }
