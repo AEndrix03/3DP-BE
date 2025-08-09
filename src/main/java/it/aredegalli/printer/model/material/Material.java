@@ -13,11 +13,17 @@ import java.time.Instant;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "material", indexes = {
-        @Index(name = "idx_material_name", columnList = "name"),
-        @Index(name = "idx_material_type", columnList = "type"),
-        @Index(name = "idx_material_brand", columnList = "brand")
-})
+@Table(name = "material",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_material_brand_name_diameter",
+                        columnNames = {"brand_id", "name", "diameter_mm"})
+        },
+        indexes = {
+                @Index(name = "idx_material_name", columnList = "name"),
+                @Index(name = "idx_material_type_id", columnList = "type_id"),
+                @Index(name = "idx_material_brand_id", columnList = "brand_id"),
+                @Index(name = "idx_material_type_brand", columnList = "type_id, brand_id")
+        })
 public class Material {
 
     @Id
@@ -28,11 +34,13 @@ public class Material {
     @Column(name = "name", nullable = false, length = 128)
     private String name;
 
-    @Column(name = "type", length = 64)
-    private String type;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "type_id", referencedColumnName = "id")
+    private MaterialType type;
 
-    @Column(name = "brand", length = 64)
-    private String brand;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "brand_id", referencedColumnName = "id")
+    private MaterialBrand brand;
 
     @Column(name = "density_g_cm3", length = 16)
     private String densityGCm3;
@@ -44,13 +52,13 @@ public class Material {
     private String costPerKg;
 
     @Column(name = "recommended_extruder_temp_min_c")
-    private long recommendedExtruderTempMinC;
+    private Long recommendedExtruderTempMinC;
 
     @Column(name = "recommended_extruder_temp_max_c")
-    private long recommendedExtruderTempMaxC;
+    private Long recommendedExtruderTempMaxC;
 
     @Column(name = "recommended_bed_temp_c")
-    private long recommendedBedTempC;
+    private Long recommendedBedTempC;
 
     @Column(name = "requires_heated_bed", length = 8)
     private String requiresHeatedBed;
@@ -73,7 +81,6 @@ public class Material {
     @Column(name = "image")
     private String image;
 
-    // Auto-set timestamps
     @PrePersist
     public void prePersist() {
         Instant now = Instant.now();

@@ -39,7 +39,6 @@ public class LogEntry {
     @Column(name = "logger", nullable = false, length = 100)
     private String logger;
 
-    // Fixed: Use TEXT instead of VARCHAR to avoid length limitations
     @Column(name = "message", nullable = false, columnDefinition = "TEXT")
     private String message;
 

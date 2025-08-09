@@ -6,7 +6,7 @@ import org.mapstruct.Mapper;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", uses = {MaterialTypeMapper.class, MaterialBrandMapper.class})
 public interface MaterialMapper {
 
     MaterialDto toDto(Material material);
@@ -16,5 +16,4 @@ public interface MaterialMapper {
     Material toEntity(MaterialDto materialDto);
 
     List<Material> toEntity(List<MaterialDto> materialDtos);
-
 }
