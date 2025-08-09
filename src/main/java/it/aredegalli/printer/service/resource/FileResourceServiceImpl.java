@@ -30,16 +30,14 @@ public class FileResourceServiceImpl implements FileResourceService {
 
     @Override
     @Transactional
-    public FileResource upload(MultipartFile file) {
+    public FileResource upload(MultipartFile file, String bucket) {
         try {
             UploadResult result = storage.upload(
                     file.getInputStream(),
                     file.getSize(),
                     file.getContentType(),
-                    PrinterCostants.PRINTER_MODEL_STORAGE_BUCKET_NAME
+                    bucket
             );
-
-            stlGlbConvertService.convertStlToGlb(result.getObjectKey());
 
             FileResource fr = FileResource.builder()
                     .fileName(file.getOriginalFilename())
@@ -47,25 +45,33 @@ public class FileResourceServiceImpl implements FileResourceService {
                     .fileSize(file.getSize())
                     .fileHash(result.getHashBytes())
                     .objectKey(result.getObjectKey())
-                    .bucketName(PrinterCostants.PRINTER_MODEL_STORAGE_BUCKET_NAME)
+                    .bucketName(bucket)
                     .uploadedAt(Instant.now())
                     .build();
 
             fr = repo.save(fr);
-
-            Model model = Model.builder()
-                    .name(fr.getFileName())
-                    .createdAt(Instant.now())
-                    .updatedAt(Instant.now())
-                    .fileResource(fr)
-                    .build();
-
-            this.modelRepository.save(model);
-
             return fr;
         } catch (IOException e) {
             throw new RuntimeException("Upload fallito", e);
         }
+    }
+
+    @Transactional
+    @Override
+    public FileResource uploadModel(MultipartFile file) {
+        FileResource fr = this.upload(file, PrinterCostants.PRINTER_MODEL_STORAGE_BUCKET_NAME);
+        stlGlbConvertService.convertStlToGlb(fr.getObjectKey());
+
+        Model model = Model.builder()
+                .name(fr.getFileName())
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .fileResource(fr)
+                .build();
+
+        this.modelRepository.save(model);
+
+        return fr;
     }
 
     @Override

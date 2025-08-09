@@ -2,6 +2,7 @@ package it.aredegalli.printer.controller.api;
 
 import it.aredegalli.printer.service.log.LogService;
 import it.aredegalli.printer.service.resource.FileResourceService;
+import it.aredegalli.printer.util.PrinterCostants;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -24,12 +25,23 @@ public class FileResourceController {
     private final LogService log;
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<UUID> upload(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<UUID> uploadModel(@RequestParam("file") MultipartFile file) {
         try {
             log.info("FileResourceController", "Uploading file: " + file.getOriginalFilename());
-            return ResponseEntity.ok(fileResourceService.upload(file).getId());
+            return ResponseEntity.ok(fileResourceService.upload(file, PrinterCostants.PRINTER_MODEL_STORAGE_BUCKET_NAME).getId());
         } catch (Exception e) {
             log.error("FileResourceController", "Upload failed: " + e.getMessage());
+            throw new RuntimeException("Upload failed", e);
+        }
+    }
+
+    @PostMapping(value = "/upload/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<UUID> uploadImage(@RequestParam("file") MultipartFile file) {
+        try {
+            log.info("FileResourceController", "Uploading image file: " + file.getOriginalFilename());
+            return ResponseEntity.ok(fileResourceService.upload(file, PrinterCostants.PRINTER_IMAGE_STORAGE_BUCKET_NAME).getId());
+        } catch (Exception e) {
+            log.error("FileResourceController", "Upload image failed: " + e.getMessage());
             throw new RuntimeException("Upload failed", e);
         }
     }
