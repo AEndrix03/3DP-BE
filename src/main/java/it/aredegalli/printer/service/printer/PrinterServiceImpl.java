@@ -2,6 +2,7 @@ package it.aredegalli.printer.service.printer;
 
 import it.aredegalli.common.exception.BadRequestException;
 import it.aredegalli.common.exception.NotFoundException;
+import it.aredegalli.printer.dto.printer.PrinterCreateDto;
 import it.aredegalli.printer.dto.printer.PrinterDto;
 import it.aredegalli.printer.mapper.printer.PrinterMapper;
 import it.aredegalli.printer.model.driver.Driver;
@@ -37,9 +38,10 @@ public class PrinterServiceImpl implements PrinterService {
     }
 
     @Override
-    public UUID createPrinter(String name) {
+    public UUID createPrinter(PrinterCreateDto printerCreateDto) {
         Printer printer = printerRepository.save(Printer.builder()
-                .name(name)
+                .name(printerCreateDto.getName())
+                .driverId(printerCreateDto.getDriverid())
                 .build());
 
         log.debug("PrinterServiceImpl", "[API] Created printer: " + printer.getId());

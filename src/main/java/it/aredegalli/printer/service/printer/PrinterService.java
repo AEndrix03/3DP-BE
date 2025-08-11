@@ -1,5 +1,6 @@
 package it.aredegalli.printer.service.printer;
 
+import it.aredegalli.printer.dto.printer.PrinterCreateDto;
 import it.aredegalli.printer.dto.printer.PrinterDto;
 
 import java.util.List;
@@ -10,7 +11,8 @@ public interface PrinterService {
 
     List<PrinterDto> getAllPrinters();
 
-    UUID createPrinter(String name);
+
+    UUID createPrinter(PrinterCreateDto printerCreateDto);
 
     UUID connectDriverToPrinter(UUID printerId, UUID driverId);
 

@@ -40,7 +40,7 @@ public class PrinterController {
     @PostMapping
     public ResponseEntity<UUID> createPrinter(@Valid @RequestBody PrinterCreateDto printerCreateDto) {
         log.info("PrinterController", "createPrinter");
-        return ResponseEntity.ok(printerService.createPrinter(printerCreateDto.getName()));
+        return ResponseEntity.ok(printerService.createPrinter(printerCreateDto));
     }
 
     @PutMapping
@@ -79,5 +79,5 @@ public class PrinterController {
         log.info("PrinterController", "updatePrinterDetail");
         return ResponseEntity.ok(printerDetailService.savePrinter(printerDetailSaveDto));
     }
-    
+
 }
