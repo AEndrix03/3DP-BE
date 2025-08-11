@@ -1,7 +1,6 @@
 package it.aredegalli.printer.service.printer.detail;
 
 import it.aredegalli.common.exception.NotFoundException;
-import it.aredegalli.printer.dto.printer.detail.PrinterDetailCreateDto;
 import it.aredegalli.printer.dto.printer.detail.PrinterDetailDto;
 import it.aredegalli.printer.dto.printer.detail.PrinterDetailSaveDto;
 import it.aredegalli.printer.model.printer.Printer;
@@ -21,39 +20,23 @@ public class PrinterDetailServiceImpl implements PrinterDetailService {
 
     private final PrinterRepository printerRepository;
 
-    @Override()
     public PrinterDetailDto getPrinterById(UUID printerId) {
         Printer printer = findPrinterById(printerId);
         return buildDetailDto(printer);
     }
 
     @Transactional
-    @Override()
-    public UUID createPrinter(PrinterDetailCreateDto createDto) {
-        Printer printer = Printer.builder()
-                .name(createDto.getName())
-                .driverId(createDto.getDriverId())
-                .lastSeen(Instant.now())
-                .build();
-
-        if (hasSpecificationData(createDto)) {
-            printer.setPrinterSpecifications(buildSpecifications(createDto, printer));
-        }
-
-        if (createDto.getFirmwareVersionId() != null) {
-            printer.setPrinterFirmware(buildFirmware(createDto.getFirmwareVersionId(), printer));
-        }
-
-        return printerRepository.save(printer).getId();
-    }
-    
-    @Transactional
-    @Override()
     public UUID savePrinter(PrinterDetailSaveDto saveDto) {
-        Printer printer = findPrinterById(saveDto.getId());
+        Printer printer = saveDto.getId() != null ?
+                findPrinterById(saveDto.getId()) :
+                Printer.builder().build();
 
         printer.setName(saveDto.getName());
         printer.setDriverId(saveDto.getDriverId());
+
+        if (saveDto.getId() == null) {
+            printer.setLastSeen(Instant.now());
+        }
 
         if (hasSpecificationData(saveDto)) {
             PrinterSpecifications specs = printer.getPrinterSpecifications();
@@ -122,7 +105,7 @@ public class PrinterDetailServiceImpl implements PrinterDetailService {
                 .build();
     }
 
-    private PrinterSpecifications buildSpecifications(PrinterDetailCreateDto dto, Printer printer) {
+    private PrinterSpecifications buildSpecifications(PrinterDetailSaveDto dto, Printer printer) {
         Instant now = Instant.now();
         return PrinterSpecifications.builder()
                 .printer(printer)
@@ -157,7 +140,7 @@ public class PrinterDetailServiceImpl implements PrinterDetailService {
                 .build();
     }
 
-    private void updateSpecifications(PrinterSpecifications specs, PrinterDetailCreateDto dto) {
+    private void updateSpecifications(PrinterSpecifications specs, PrinterDetailSaveDto dto) {
         specs.setBuildVolumeXMm(dto.getBuildVolumeXMm());
         specs.setBuildVolumeYMm(dto.getBuildVolumeYMm());
         specs.setBuildVolumeZMm(dto.getBuildVolumeZMm());
@@ -195,7 +178,7 @@ public class PrinterDetailServiceImpl implements PrinterDetailService {
                 .build();
     }
 
-    private boolean hasSpecificationData(PrinterDetailCreateDto dto) {
+    private boolean hasSpecificationData(PrinterDetailSaveDto dto) {
         return dto.getBuildVolumeXMm() != null || dto.getBuildVolumeYMm() != null ||
                 dto.getBuildVolumeZMm() != null || dto.getBuildPlateMaterial() != null ||
                 dto.getExtruderCount() != null || dto.getNozzleDiameterMm() != null ||

@@ -3,7 +3,6 @@ package it.aredegalli.printer.controller.api;
 import it.aredegalli.printer.dto.printer.PrinterCreateDto;
 import it.aredegalli.printer.dto.printer.PrinterDto;
 import it.aredegalli.printer.dto.printer.PrinterSaveDto;
-import it.aredegalli.printer.dto.printer.detail.PrinterDetailCreateDto;
 import it.aredegalli.printer.dto.printer.detail.PrinterDetailDto;
 import it.aredegalli.printer.dto.printer.detail.PrinterDetailSaveDto;
 import it.aredegalli.printer.service.log.LogService;
@@ -75,17 +74,10 @@ public class PrinterController {
         return ResponseEntity.ok(printerDetailService.getPrinterById(printerId));
     }
 
-    @PostMapping("/detail/{printerId}")
-    public ResponseEntity<UUID> createPrinterDetail(@RequestBody PrinterDetailCreateDto printerDetailCreateDto) {
-        log.info("PrinterController", "createPrinterDetail");
-        return ResponseEntity.ok(printerDetailService.createPrinter(printerDetailCreateDto));
-    }
-
-    @PutMapping("/detail/{printerId}")
+    @PatchMapping("/detail/{printerId}")
     public ResponseEntity<UUID> updatePrinterDetail(@RequestBody PrinterDetailSaveDto printerDetailSaveDto) {
         log.info("PrinterController", "updatePrinterDetail");
         return ResponseEntity.ok(printerDetailService.savePrinter(printerDetailSaveDto));
     }
-
-
+    
 }
