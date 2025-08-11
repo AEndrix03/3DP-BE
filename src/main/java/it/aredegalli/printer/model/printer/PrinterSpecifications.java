@@ -21,8 +21,8 @@ public class PrinterSpecifications {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    @ManyToOne
-    @JoinColumn(name = "printer_id")
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "printer_id", nullable = false, unique = true)
     private Printer printer;
 
     @Column(name = "build_volume_x_mm")

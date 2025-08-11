@@ -1,4 +1,4 @@
-package it.aredegalli.printer.model.driver;
+package it.aredegalli.printer.model.printer;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

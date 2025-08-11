@@ -1,6 +1,5 @@
 package it.aredegalli.printer.model.printer;
 
-import it.aredegalli.printer.model.driver.FirmwareVersion;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,9 +25,8 @@ public class PrinterFirmware {
     @JoinColumn(name = "printer_id")
     private Printer printer;
 
-    @ManyToOne
-    @JoinColumn(name = "firmware_id")
-    private FirmwareVersion firmwareVersion;
+    @Column(name = "firmware_id")
+    private UUID firmwareVersionId;
 
     private Instant installedAt;
 }

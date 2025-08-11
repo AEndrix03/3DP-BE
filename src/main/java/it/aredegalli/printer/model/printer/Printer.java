@@ -26,9 +26,16 @@ public class Printer {
 
     private UUID driverId;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "status")
     private PrinterStatus status;
 
     private Instant lastSeen;
+
+    @OneToOne(mappedBy = "printer", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private PrinterSpecifications printerSpecifications;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "current_firmware_id")
+    private PrinterFirmware printerFirmware;
 }

@@ -29,9 +29,9 @@ public interface MaterialRepository extends UUIDRepository<Material> {
     @Query("SELECT DISTINCT m FROM Material m " +
             "JOIN FETCH m.type t " +
             "JOIN FETCH m.brand b " +
-            "WHERE (:name IS NULL OR LOWER(m.name) LIKE LOWER(CONCAT('%', :name, '%'))) " +
-            "AND (:type IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', :type, '%'))) " +
-            "AND (:brand IS NULL OR LOWER(b.name) LIKE LOWER(CONCAT('%', :brand, '%'))) " +
+            "WHERE (:name IS NULL OR :name = '' OR LOWER(m.name) LIKE LOWER(CONCAT('%', :name, '%'))) " +
+            "AND (:type IS NULL OR :type = '' OR LOWER(t.name) = LOWER(:type)) " +
+            "AND (:brand IS NULL OR :brand = '' OR LOWER(b.name) = LOWER(:brand)) " +
             "ORDER BY m.name ASC")
     List<Material> searchMaterials(@Param("name") String name,
                                    @Param("type") String type,

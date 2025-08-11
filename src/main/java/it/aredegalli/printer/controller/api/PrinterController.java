@@ -3,8 +3,12 @@ package it.aredegalli.printer.controller.api;
 import it.aredegalli.printer.dto.printer.PrinterCreateDto;
 import it.aredegalli.printer.dto.printer.PrinterDto;
 import it.aredegalli.printer.dto.printer.PrinterSaveDto;
+import it.aredegalli.printer.dto.printer.detail.PrinterDetailCreateDto;
+import it.aredegalli.printer.dto.printer.detail.PrinterDetailDto;
+import it.aredegalli.printer.dto.printer.detail.PrinterDetailSaveDto;
 import it.aredegalli.printer.service.log.LogService;
 import it.aredegalli.printer.service.printer.PrinterService;
+import it.aredegalli.printer.service.printer.detail.PrinterDetailService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +23,7 @@ import java.util.UUID;
 public class PrinterController {
 
     private final PrinterService printerService;
+    private final PrinterDetailService printerDetailService;
     private final LogService log;
 
     @GetMapping("/{id}")
@@ -63,5 +68,24 @@ public class PrinterController {
         log.info("PrinterController", "disconnectDriverFromPrinter printerId=" + printerId);
         return ResponseEntity.ok(printerService.disconnectDriverFromPrinter(printerId));
     }
+
+    @GetMapping("/detail/{printerId}")
+    public ResponseEntity<PrinterDetailDto> getPrinterDetail(@PathVariable UUID printerId) {
+        log.info("PrinterController", "disconnectDriverFromPrinter printerId=" + printerId);
+        return ResponseEntity.ok(printerDetailService.getPrinterById(printerId));
+    }
+
+    @PostMapping("/detail/{printerId}")
+    public ResponseEntity<UUID> createPrinterDetail(@RequestBody PrinterDetailCreateDto printerDetailCreateDto) {
+        log.info("PrinterController", "createPrinterDetail");
+        return ResponseEntity.ok(printerDetailService.createPrinter(printerDetailCreateDto));
+    }
+
+    @PutMapping("/detail/{printerId}")
+    public ResponseEntity<UUID> updatePrinterDetail(@RequestBody PrinterDetailSaveDto printerDetailSaveDto) {
+        log.info("PrinterController", "updatePrinterDetail");
+        return ResponseEntity.ok(printerDetailService.savePrinter(printerDetailSaveDto));
+    }
+
 
 }
