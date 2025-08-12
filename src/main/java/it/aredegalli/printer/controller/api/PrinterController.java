@@ -2,6 +2,7 @@ package it.aredegalli.printer.controller.api;
 
 import it.aredegalli.printer.dto.printer.PrinterCreateDto;
 import it.aredegalli.printer.dto.printer.PrinterDto;
+import it.aredegalli.printer.dto.printer.PrinterFilterDto;
 import it.aredegalli.printer.dto.printer.PrinterSaveDto;
 import it.aredegalli.printer.dto.printer.detail.PrinterDetailDto;
 import it.aredegalli.printer.dto.printer.detail.PrinterDetailSaveDto;
@@ -70,7 +71,7 @@ public class PrinterController {
 
     @GetMapping("/detail/{printerId}")
     public ResponseEntity<PrinterDetailDto> getPrinterDetail(@PathVariable UUID printerId) {
-        log.info("PrinterController", "disconnectDriverFromPrinter printerId=" + printerId);
+        log.info("PrinterController", "getPrinterDetail printerId=" + printerId);
         return ResponseEntity.ok(printerDetailService.getPrinterById(printerId));
     }
 
@@ -78,6 +79,51 @@ public class PrinterController {
     public ResponseEntity<UUID> updatePrinterDetail(@RequestBody PrinterDetailSaveDto printerDetailSaveDto) {
         log.info("PrinterController", "updatePrinterDetail");
         return ResponseEntity.ok(printerDetailService.savePrinter(printerDetailSaveDto));
+    }
+
+    /**
+     * Search printers with filters - following materials pattern
+     * Supports query parameters: name, driverId, status
+     * <p>
+     * Examples:
+     * GET /api/printer/search?name=prusa
+     * GET /api/printer/search?status=ONLINE
+     * GET /api/printer/search?name=ender&status=PRINTING
+     */
+    @GetMapping("/search")
+    public ResponseEntity<List<PrinterDto>> searchPrinters(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String driverId,
+            @RequestParam(required = false) String status
+    ) {
+        log.info("PrinterController", String.format("searchPrinters with filters - name: %s, driverId: %s, status: %s",
+                name, driverId, status));
+
+        PrinterFilterDto filters = PrinterFilterDto.builder()
+                .name(name)
+                .driverId(driverId)
+                .status(status)
+                .build();
+
+        return ResponseEntity.ok(printerService.searchPrinters(filters));
+    }
+    
+    @GetMapping("/status/{status}")
+    public ResponseEntity<List<PrinterDto>> getPrintersByStatus(@PathVariable String status) {
+        log.info("PrinterController", "getPrintersByStatus with status: " + status);
+        return ResponseEntity.ok(printerService.getPrintersByStatus(status));
+    }
+
+    @GetMapping("/driver/{driverId}")
+    public ResponseEntity<List<PrinterDto>> getPrintersByDriverId(@PathVariable String driverId) {
+        log.info("PrinterController", "getPrintersByDriverId with driverId: " + driverId);
+
+        // Filter printers by driverId (string matching)
+        PrinterFilterDto filters = PrinterFilterDto.builder()
+                .driverId(driverId)
+                .build();
+
+        return ResponseEntity.ok(printerService.searchPrinters(filters));
     }
 
 }

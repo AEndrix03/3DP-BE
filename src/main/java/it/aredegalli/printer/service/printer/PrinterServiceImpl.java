@@ -4,6 +4,7 @@ import it.aredegalli.common.exception.BadRequestException;
 import it.aredegalli.common.exception.NotFoundException;
 import it.aredegalli.printer.dto.printer.PrinterCreateDto;
 import it.aredegalli.printer.dto.printer.PrinterDto;
+import it.aredegalli.printer.dto.printer.PrinterFilterDto;
 import it.aredegalli.printer.mapper.printer.PrinterMapper;
 import it.aredegalli.printer.model.driver.Driver;
 import it.aredegalli.printer.model.printer.Printer;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +40,7 @@ public class PrinterServiceImpl implements PrinterService {
                             .id(p.getId())
                             .name(p.getName())
                             .image(p.getImage())
+                            .status(p.getStatus() != null ? p.getStatus().getCode() : null)
                             .driverId(p.getDriverId())
                             .lastSeen(p.getLastSeen())
                             .build();
@@ -109,6 +112,58 @@ public class PrinterServiceImpl implements PrinterService {
 
         log.debug("PrinterServiceImpl", "[API] Deleted printer " + printer.getId());
         return printer.getId();
+    }
+
+    @Override
+    public List<PrinterDto> searchPrinters(PrinterFilterDto filters) {
+        log.debug("PrinterServiceImpl", "[API] Searching printers with filters: " + filters);
+
+        // If no filters, return all printers
+        if (filters == null || !filters.hasAnyFilter()) {
+            return getAllPrinters();
+        }
+
+        // Get all printers and apply filtering
+        List<PrinterDto> allPrinters = getAllPrinters();
+
+        return allPrinters.stream()
+                .filter(printer -> matchesFilters(printer, filters))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<PrinterDto> getPrintersByStatus(String status) {
+        log.debug("PrinterServiceImpl", "[API] Getting printers by status: " + status);
+
+        return printerRepository.findPrinterByStatus_Code(status).stream()
+                .map(printerMapper::toDto)
+                .toList();
+    }
+
+    /**
+     * Check if a printer matches the given filters
+     */
+    private boolean matchesFilters(PrinterDto printer, PrinterFilterDto filters) {
+        if (filters.hasNameFilter()) {
+            String printerName = printer.getName() != null ? printer.getName().toLowerCase() : "";
+            if (!printerName.contains(filters.getNameTrimmed())) {
+                return false;
+            }
+        }
+
+        if (filters.hasDriverIdFilter()) {
+            String printerDriverId = printer.getDriverId() != null ? printer.getDriverId().toString() : "";
+            if (!printerDriverId.toLowerCase().contains(filters.getDriverIdTrimmed().toLowerCase())) {
+                return false;
+            }
+        }
+
+        if (filters.hasStatusFilter()) {
+            String printerStatus = printer.getStatus() != null ? printer.getStatus() : "";
+            return filters.getStatusTrimmed().equalsIgnoreCase(printerStatus);
+        }
+
+        return true;
     }
 
 }
