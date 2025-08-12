@@ -17,6 +17,8 @@ public class PrinterDetailSaveDto {
 
     private UUID id;
 
+    private String image;
+
     @NotBlank(message = "Printer name is required")
     private String name;
     private UUID driverId;

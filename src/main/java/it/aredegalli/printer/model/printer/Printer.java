@@ -32,6 +32,8 @@ public class Printer {
 
     private Instant lastSeen;
 
+    private String image;
+
     @OneToOne(mappedBy = "printer", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private PrinterSpecifications printerSpecifications;
 

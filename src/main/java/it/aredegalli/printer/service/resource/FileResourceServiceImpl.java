@@ -39,7 +39,13 @@ public class FileResourceServiceImpl implements FileResourceService {
                     bucket
             );
 
-            FileResource fr = FileResource.builder()
+            FileResource fr = this.repo.findByFileHash(result.getHashBytes());
+
+            if (fr != null) {
+                return fr;
+            }
+
+            fr = FileResource.builder()
                     .fileName(file.getOriginalFilename())
                     .fileType(file.getContentType())
                     .fileSize(file.getSize())

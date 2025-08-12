@@ -33,6 +33,7 @@ public class PrinterDetailServiceImpl implements PrinterDetailService {
 
         printer.setName(saveDto.getName());
         printer.setDriverId(saveDto.getDriverId());
+        printer.setImage(saveDto.getImage());
 
         if (saveDto.getId() == null) {
             printer.setLastSeen(Instant.now());
@@ -70,6 +71,7 @@ public class PrinterDetailServiceImpl implements PrinterDetailService {
         return PrinterDetailDto.builder()
                 .id(printer.getId())
                 .name(printer.getName())
+                .image(printer.getImage())
                 .driverId(printer.getDriverId())
                 .lastSeen(printer.getLastSeen())
                 .firmwareVersionId(firmware != null ? firmware.getFirmwareVersionId() : null)

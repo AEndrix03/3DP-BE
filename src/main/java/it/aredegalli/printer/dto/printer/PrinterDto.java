@@ -18,5 +18,6 @@ public class PrinterDto {
     private String name;
     private UUID driverId;
     private Instant lastSeen;
+    private String image;
 
 }

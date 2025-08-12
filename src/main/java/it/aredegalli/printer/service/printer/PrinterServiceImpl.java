@@ -33,7 +33,16 @@ public class PrinterServiceImpl implements PrinterService {
     @Override
     public List<PrinterDto> getAllPrinters() {
         return printerRepository.findAll().stream()
-                .map(printerMapper::toDto)
+                .map(p -> {
+                    PrinterDto _p = PrinterDto.builder()
+                            .id(p.getId())
+                            .name(p.getName())
+                            .image(p.getImage())
+                            .driverId(p.getDriverId())
+                            .lastSeen(p.getLastSeen())
+                            .build();
+                    return _p;
+                })
                 .toList();
     }
 
