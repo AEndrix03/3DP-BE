@@ -38,17 +38,19 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_NUM_PARTITIONS: 3
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
-      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      KAFKA_LOG_DIRS: /var/kafka-logs
     volumes:
-      - kafka_data:/tmp/kraft-combined-logs
+      - kafka_data:/var/kafka-logs
+    user: "1000:1000"
     restart: unless-stopped
+    networks:
+      - printer-net
     healthcheck:
       test: [ "CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server localhost:9092 | grep -q 'sasl_plaintext'|| kafka-broker-api-versions.sh --bootstrap-server localhost:9092" ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
-
 
 networks:
   printer-net:
