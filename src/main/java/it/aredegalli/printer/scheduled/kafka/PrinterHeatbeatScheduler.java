@@ -15,7 +15,7 @@ public class PrinterHeatbeatScheduler {
 
     @Scheduled(fixedDelay = 60000)
     public void scheduleHeartbeatBroadcast() {
-        this.printerHeartbeatService.broadcastHeartbeatRequest();
+        //this.printerHeartbeatService.broadcastHeartbeatRequest();
     }
 
 }

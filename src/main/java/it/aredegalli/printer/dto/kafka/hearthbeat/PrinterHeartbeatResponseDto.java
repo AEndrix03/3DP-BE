@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class PrinterHeartbeatResponse {
+public class PrinterHeartbeatResponseDto {
 
     private String driverId;
     private String statusCode;

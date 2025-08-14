@@ -1,7 +1,7 @@
 package it.aredegalli.printer.service.kafka.hearthbeat;
 
-import it.aredegalli.printer.dto.kafka.hearthbeat.PrinterHeartbeatRequest;
-import it.aredegalli.printer.dto.kafka.hearthbeat.PrinterHeartbeatResponse;
+import it.aredegalli.printer.dto.kafka.hearthbeat.PrinterHeartbeatRequestDto;
+import it.aredegalli.printer.dto.kafka.hearthbeat.PrinterHeartbeatResponseDto;
 import it.aredegalli.printer.model.printer.Printer;
 import it.aredegalli.printer.model.printer.PrinterStatus;
 import it.aredegalli.printer.repository.printer.PrinterRepository;
@@ -34,7 +34,7 @@ public class PrinterHeartbeatServiceImpl implements PrinterHeartbeatService {
     public CompletableFuture<SendResult<String, Object>> broadcastHeartbeatRequest() {
         log.info("Broadcasting health check to all drivers");
 
-        return this.kafkaTemplate.send(KafkaTopicEnum.PRINTER_HEARTBEATH_REQUEST.getTopicName(), new PrinterHeartbeatRequest())
+        return this.kafkaTemplate.send(KafkaTopicEnum.PRINTER_HEARTBEATH_REQUEST.getTopicName(), new PrinterHeartbeatRequestDto())
                 .whenComplete((result, ex) -> {
                     if (ex == null) {
                         log.info("Health check broadcast sent successfully: offset={}",
@@ -47,7 +47,7 @@ public class PrinterHeartbeatServiceImpl implements PrinterHeartbeatService {
 
     @KafkaListener(topics = "printer-heartbeat-response", groupId = "printer-server")
     public void handlePrinterHearthbeat(ConsumerRecord<String, Object> record) {
-        PrinterHeartbeatResponse heartbeat = deserializeHeartbeatResponse(record.value());
+        PrinterHeartbeatResponseDto heartbeat = deserializeHeartbeatResponse(record.value());
 
         Printer printer = this.printerRepository.findByDriverId(UUID.fromString(heartbeat.getDriverId())).orElse(null);
 
@@ -69,18 +69,18 @@ public class PrinterHeartbeatServiceImpl implements PrinterHeartbeatService {
         this.printerRepository.save(printer);
     }
 
-    private static PrinterHeartbeatResponse deserializeHeartbeatResponse(Object payload) {
-        PrinterHeartbeatResponse heartbeat;
+    private static PrinterHeartbeatResponseDto deserializeHeartbeatResponse(Object payload) {
+        PrinterHeartbeatResponseDto heartbeat;
 
         if (payload instanceof LinkedHashMap<?, ?>) {
             @SuppressWarnings("unchecked")
             Map<String, Object> map = (Map<String, Object>) payload;
-            heartbeat = new PrinterHeartbeatResponse(
+            heartbeat = new PrinterHeartbeatResponseDto(
                     (String) map.get("driverId"),
                     (String) map.get("statusCode")
             );
-        } else if (payload instanceof PrinterHeartbeatResponse) {
-            heartbeat = (PrinterHeartbeatResponse) payload;
+        } else if (payload instanceof PrinterHeartbeatResponseDto) {
+            heartbeat = (PrinterHeartbeatResponseDto) payload;
         } else {
             throw new IllegalArgumentException("Unsupported payload type: " + payload.getClass());
         }
