@@ -1,15 +1,21 @@
-package it.aredegalli.printer.dto.kafka.control;
+package it.aredegalli.printer.dto.kafka.control.check;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class PrinterCheckResponseDto {
 
-    private String statusCode;
+    private String jobId;
+    private String driverId;
+
+    private String jobStatusCode;
+    private String printerStatusCode;
 
     private String xPosition;
     private String yPosition;
@@ -18,6 +24,7 @@ public class PrinterCheckResponseDto {
     private String feed;
 
     private String layer;
+    private String layerHeight;
 
     private String extruderStatus;
     private String extruderTemp;
@@ -32,5 +39,6 @@ public class PrinterCheckResponseDto {
     private String averageSpeed;
 
     private String exceptions;
+    private String logs;
 
 }

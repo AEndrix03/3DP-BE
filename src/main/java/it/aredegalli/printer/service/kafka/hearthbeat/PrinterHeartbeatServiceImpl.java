@@ -2,11 +2,11 @@ package it.aredegalli.printer.service.kafka.hearthbeat;
 
 import it.aredegalli.printer.dto.kafka.hearthbeat.PrinterHeartbeatRequestDto;
 import it.aredegalli.printer.dto.kafka.hearthbeat.PrinterHeartbeatResponseDto;
+import it.aredegalli.printer.enums.kafka.KafkaTopicEnum;
 import it.aredegalli.printer.model.printer.Printer;
 import it.aredegalli.printer.model.printer.PrinterStatus;
 import it.aredegalli.printer.repository.printer.PrinterRepository;
 import it.aredegalli.printer.repository.printer.PrinterStatusRepository;
-import it.aredegalli.printer.service.kafka.KafkaTopicEnum;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
