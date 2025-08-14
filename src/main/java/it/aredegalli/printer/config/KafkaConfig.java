@@ -1,6 +1,7 @@
 package it.aredegalli.printer.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -28,6 +29,14 @@ public class KafkaConfig {
     @Value("${spring.kafka.consumer.group-id:printer-server}")
     private String groupId;
 
+    @Bean
+    public ObjectMapper kafkaObjectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        mapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+        return mapper;
+    }
+
     /**
      * Producer Configuration per inviare comandi alle stampanti
      */
@@ -39,7 +48,7 @@ public class KafkaConfig {
         configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
 
         // Performance e reliability settings
-        configProps.put(ProducerConfig.ACKS_CONFIG, "1"); // Leader acknowledgment
+        configProps.put(ProducerConfig.ACKS_CONFIG, "all");
         configProps.put(ProducerConfig.RETRIES_CONFIG, 3);
         configProps.put(ProducerConfig.BATCH_SIZE_CONFIG, 16384);
         configProps.put(ProducerConfig.LINGER_MS_CONFIG, 5);
@@ -48,7 +57,10 @@ public class KafkaConfig {
         // Idempotency per evitare duplicati
         configProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
 
-        return new DefaultKafkaProducerFactory<>(configProps);
+        DefaultKafkaProducerFactory<String, Object> factory = new DefaultKafkaProducerFactory<>(configProps);
+        factory.setValueSerializer(new JsonSerializer<>(kafkaObjectMapper()));
+
+        return factory;
     }
 
     @Bean
@@ -76,11 +88,14 @@ public class KafkaConfig {
         configProps.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 10000);
 
         // JSON Deserializer configuration
-        configProps.put(JsonDeserializer.TRUSTED_PACKAGES, "com.example.printer3d.model.*");
+        configProps.put(JsonDeserializer.TRUSTED_PACKAGES, "it.aredegalli.printer.dto.kafka.*");
         configProps.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
         configProps.put(JsonDeserializer.VALUE_DEFAULT_TYPE, Object.class);
 
-        return new DefaultKafkaConsumerFactory<>(configProps);
+        DefaultKafkaConsumerFactory<String, Object> factory = new DefaultKafkaConsumerFactory<>(configProps);
+        factory.setValueDeserializer(new ErrorHandlingDeserializer<>(new JsonDeserializer<>(kafkaObjectMapper())));
+
+        return factory;
     }
 
     @Bean
@@ -95,15 +110,5 @@ public class KafkaConfig {
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.BATCH);
 
         return factory;
-    }
-
-    /**
-     * ObjectMapper customizzato per JSON serialization
-     */
-    @Bean
-    public ObjectMapper kafkaObjectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new JavaTimeModule());
-        return mapper;
     }
 }
