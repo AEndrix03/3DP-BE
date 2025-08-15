@@ -3,6 +3,7 @@ package it.aredegalli.printer.service.printer;
 import it.aredegalli.printer.dto.printer.PrinterCreateDto;
 import it.aredegalli.printer.dto.printer.PrinterDto;
 import it.aredegalli.printer.dto.printer.PrinterFilterDto;
+import it.aredegalli.printer.dto.printer.control.PrinterStartRequestDto;
 
 import java.util.List;
 import java.util.UUID;
@@ -31,4 +32,5 @@ public interface PrinterService {
 
     List<PrinterDto> getPrintersByStatus(String status);
 
+    UUID startPrint(PrinterStartRequestDto startRequestDto);
 }

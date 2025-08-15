@@ -4,11 +4,16 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class JobStartRequestDto {
 
-    private Long startOffsetLine;
+    private UUID printerId;
+    private UUID slicingId;
+
+    private Integer startOffset;
 
 }

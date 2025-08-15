@@ -29,6 +29,12 @@ public class Driver {
 
     private Instant lastAuth;
 
+    @Column(name = "custom_start_gcode")
+    private String customStartGCode;
+
+    @Column(name = "custom_end_gcode")
+    private String customEndGCode;
+
     @Lob
     private String publicKey;
 }
