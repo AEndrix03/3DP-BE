@@ -3,26 +3,16 @@ package it.aredegalli.printer.service.job;
 import it.aredegalli.common.exception.NotFoundException;
 import it.aredegalli.printer.dto.job.JobDto;
 import it.aredegalli.printer.dto.job.request.JobStartRequestDto;
-import it.aredegalli.printer.dto.kafka.control.status.PrinterStartRequestDto;
 import it.aredegalli.printer.enums.job.JobStatusEnum;
 import it.aredegalli.printer.mapper.job.JobMapper;
-import it.aredegalli.printer.model.driver.Driver;
 import it.aredegalli.printer.model.job.Job;
 import it.aredegalli.printer.model.printer.Printer;
 import it.aredegalli.printer.model.slicing.result.SlicingResult;
-import it.aredegalli.printer.repository.driver.DriverRepository;
-import it.aredegalli.printer.repository.job.JobHistoryRepository;
 import it.aredegalli.printer.repository.job.JobRepository;
 import it.aredegalli.printer.repository.printer.PrinterRepository;
-import it.aredegalli.printer.repository.resource.FileResourceRepository;
 import it.aredegalli.printer.repository.slicing.result.SlicingResultRepository;
-import it.aredegalli.printer.service.job.status.JobStatusService;
-import it.aredegalli.printer.service.kafka.control.status.PrinterStatusControlService;
-import it.aredegalli.printer.service.log.LogService;
-import it.aredegalli.printer.service.resource.FileResourceService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -33,20 +23,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class JobServiceImpl implements JobService {
 
-    @Value("${deployment.url}")
-    private String deploymentUrl;
-
     private final JobRepository jobRepository;
-    private final LogService log;
-    private final JobStatusService jobStatusService;
-    private final JobHistoryRepository jobHistoryRepository;
     private final JobMapper jobMapper;
     private final PrinterRepository printerRepository;
-    private final FileResourceRepository fileResourceRepository;
-    private final FileResourceService fileResourceService;
     private final SlicingResultRepository slicingResultRepository;
-    private final DriverRepository driverRepository;
-    private final PrinterStatusControlService printerStatusControlService;
 
     @Override
     public JobDto getJob(UUID id) {
@@ -70,8 +50,6 @@ public class JobServiceImpl implements JobService {
                 .orElseThrow(() -> new NotFoundException("Printer not found"));
         SlicingResult slicingResult = slicingResultRepository.findById(startRequestDto.getSlicingId())
                 .orElseThrow(() -> new NotFoundException("Slicing result not found"));
-        Driver driver = driverRepository.findById(printer.getDriverId())
-                .orElseThrow(() -> new NotFoundException("Driver not found"));
 
         Job job = Job.builder()
                 .printer(printer)
@@ -82,18 +60,6 @@ public class JobServiceImpl implements JobService {
                 .build();
 
         this.jobRepository.save(job);
-
-        String gcodeJwtToken = this.fileResourceService.ensureResource(slicingResult.getGeneratedFile().getId(), driver.getId());
-
-        PrinterStartRequestDto startRequest = PrinterStartRequestDto.builder()
-                .driverId(driver.getId().toString())
-                .startGCode(driver.getCustomStartGCode())
-                .endGCode(driver.getCustomEndGCode())
-                .gcodeUrl(this.deploymentUrl + "/public/download?token=" + gcodeJwtToken)
-                .build();
-
-        this.printerStatusControlService.startPrint(startRequest);
-
         return job.getId();
     }
 

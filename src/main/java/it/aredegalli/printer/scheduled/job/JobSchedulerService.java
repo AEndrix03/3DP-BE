@@ -1,11 +1,19 @@
 package it.aredegalli.printer.scheduled.job;
 
+import it.aredegalli.common.exception.NotFoundException;
+import it.aredegalli.printer.dto.kafka.control.status.PrinterStartRequestDto;
 import it.aredegalli.printer.enums.job.JobStatusEnum;
+import it.aredegalli.printer.model.driver.Driver;
 import it.aredegalli.printer.model.job.Job;
+import it.aredegalli.printer.repository.driver.DriverRepository;
 import it.aredegalli.printer.repository.job.JobRepository;
+import it.aredegalli.printer.service.kafka.control.status.PrinterStatusControlService;
 import it.aredegalli.printer.service.log.LogService;
+import it.aredegalli.printer.service.resource.FileResourceService;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -23,7 +31,13 @@ import java.util.List;
 @RequiredArgsConstructor
 public class JobSchedulerService {
 
+    @Value("${deployment.url}")
+    private String deploymentUrl;
+
     private final JobRepository jobRepository;
+    private final DriverRepository driverRepository;
+    private final FileResourceService fileResourceService;
+    private final PrinterStatusControlService printerStatusControlService;
     private final LogService logService;
 
     /**
@@ -49,7 +63,7 @@ public class JobSchedulerService {
 
             if (!createdJobs.isEmpty()) {
                 logService.info("JobSchedulerService",
-                        String.format("Found %d created jobs to start", createdJobs.size()));
+                        String.format("Found %d created jobs to enqueue", createdJobs.size()));
 
                 processCreatedJobs(createdJobs);
             }
@@ -114,7 +128,8 @@ public class JobSchedulerService {
     /**
      * Start a job by updating its status
      */
-    private void startJob(Job job) {
+    @Transactional
+    protected void startJob(Job job) {
         logService.info("JobSchedulerService",
                 String.format("Starting job %s on printer %s",
                         job.getId(), job.getPrinter().getId()));
@@ -122,7 +137,21 @@ public class JobSchedulerService {
         job.setStatus(JobStatusEnum.RUNNING);
         job.setStartedAt(Instant.now());
 
+        Driver driver = driverRepository.findById(job.getPrinter().getDriverId())
+                .orElseThrow(() -> new NotFoundException("Driver not found"));
+
         jobRepository.save(job);
+
+        String gcodeJwtToken = this.fileResourceService.ensureResource(job.getSlicingResult().getGeneratedFile().getId(), driver.getId());
+
+        PrinterStartRequestDto startRequest = PrinterStartRequestDto.builder()
+                .driverId(driver.getId().toString())
+                .startGCode(driver.getCustomStartGCode())
+                .endGCode(driver.getCustomEndGCode())
+                .gcodeUrl(this.deploymentUrl + "/public/download?token=" + gcodeJwtToken)
+                .build();
+
+        this.printerStatusControlService.startPrint(startRequest);
 
         logService.info("JobSchedulerService",
                 String.format("Job %s started successfully", job.getId()));

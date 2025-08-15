@@ -26,11 +26,11 @@ public class Job {
     @Column(nullable = false, updatable = false)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne()
     @JoinColumn(name = "printer_id")
     private Printer printer;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne()
     @JoinColumn(name = "slicing_id", nullable = false)
     private SlicingResult slicingResult;
 
