@@ -4,6 +4,7 @@ import it.aredegalli.common.exception.NotFoundException;
 import it.aredegalli.printer.dto.job.JobDto;
 import it.aredegalli.printer.dto.job.request.JobStartRequestDto;
 import it.aredegalli.printer.dto.kafka.control.status.PrinterStartRequestDto;
+import it.aredegalli.printer.enums.job.JobStatusEnum;
 import it.aredegalli.printer.mapper.job.JobMapper;
 import it.aredegalli.printer.model.driver.Driver;
 import it.aredegalli.printer.model.job.Job;
@@ -74,6 +75,7 @@ public class JobServiceImpl implements JobService {
 
         Job job = Job.builder()
                 .printer(printer)
+                .status(JobStatusEnum.CREATED)
                 .slicingResult(slicingResult)
                 .startOffsetLine(startRequestDto.getStartOffset())
                 .createdAt(Instant.now())

@@ -34,8 +34,11 @@ public class JobSchedulerService {
         try {
             logService.debug("JobSchedulerService", "Checking for jobs to schedule...");
 
-            // Find jobs that are queued and ready to run
             List<Job> queuedJobs = jobRepository.findByStatusOrderByCreatedAtAsc(JobStatusEnum.QUEUED);
+            List<Job> createdJobs = jobRepository.findByStatusOrderByCreatedAtAsc(JobStatusEnum.CREATED);
+
+            // First process queued jobs, then created jobs
+            // This ensures that we handle jobs in the order they were created
 
             if (!queuedJobs.isEmpty()) {
                 logService.info("JobSchedulerService",
@@ -44,9 +47,14 @@ public class JobSchedulerService {
                 processQueuedJobs(queuedJobs);
             }
 
-            // Check for stale running jobs (optional cleanup)
-            cleanupStaleJobs();
+            if (!createdJobs.isEmpty()) {
+                logService.info("JobSchedulerService",
+                        String.format("Found %d created jobs to start", createdJobs.size()));
 
+                processCreatedJobs(createdJobs);
+            }
+
+            cleanupStaleJobs();
         } catch (Exception e) {
             logService.error("JobSchedulerService",
                     "Error during job scheduling: " + e.getMessage());
@@ -54,10 +62,17 @@ public class JobSchedulerService {
     }
 
     /**
-     * Process queued jobs based on printer availability
+     * Process created jobs: simply jump to QUEUED status
      */
-    private void processQueuedJobs(List<Job> queuedJobs) {
-        for (Job job : queuedJobs) {
+    private void processCreatedJobs(List<Job> queuedJobs) {
+        for (Job job : queuedJobs)
+            job.setStatus(JobStatusEnum.QUEUED);
+
+        jobRepository.saveAll(queuedJobs);
+    }
+
+    private void processQueuedJobs(List<Job> startedJobs) {
+        for (Job job : startedJobs) {
             try {
                 // Check if printer is available for this job
                 if (isPrinterAvailable(job)) {
