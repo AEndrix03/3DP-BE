@@ -21,6 +21,7 @@ import it.aredegalli.printer.service.log.LogService;
 import it.aredegalli.printer.service.resource.FileResourceService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -30,6 +31,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class JobServiceImpl implements JobService {
+
+    @Value("${deployment.url}")
+    private String deploymentUrl;
 
     private final JobRepository jobRepository;
     private final LogService log;
@@ -77,11 +81,13 @@ public class JobServiceImpl implements JobService {
 
         this.jobRepository.save(job);
 
+        String gcodeJwtToken = this.fileResourceService.ensureResource(slicingResult.getGeneratedFile().getId(), driver.getId());
+
         PrinterStartRequestDto startRequest = PrinterStartRequestDto.builder()
-                .driverId(printer.getDriverId().toString())
+                .driverId(driver.getId().toString())
                 .startGCode(driver.getCustomStartGCode())
                 .endGCode(driver.getCustomEndGCode())
-                .gcodeUrl(null) //TODO
+                .gcodeUrl(this.deploymentUrl + "/public/download?token=" + gcodeJwtToken)
                 .build();
 
         this.printerStatusControlService.startPrint(startRequest);

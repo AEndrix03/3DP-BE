@@ -145,6 +145,10 @@ external-services:
 stl2glb:
   url: ${STL2GLB_SERVICE_URL:http://dev.aredegalli.it:9002}
 
+jwt:
+  secret: ${PRINTER_JWT_SECRET}
+  expiration: 300
+
 slicing:
   default-engine: ${SLICING_DEFAULT_ENGINE:CuraEngine}
 
@@ -168,19 +172,5 @@ slicing:
       depth: 200
       height: 200
 
-  materials:
-    pla:
-      density-g-cm3: 1.25
-      cost-per-kg: 25.0
-      default-extruder-temp: 210
-      default-bed-temp: 60
-    abs:
-      density-g-cm3: 1.04
-      cost-per-kg: 28.0
-      default-extruder-temp: 250
-      default-bed-temp: 80
-    petg:
-      density-g-cm3: 1.27
-      cost-per-kg: 32.0
-      default-extruder-temp: 230
-      default-bed-temp: 70
+deployment:
+  url: ${PRINTER_DEPLOYMENT_URL:http://localhost:8443}

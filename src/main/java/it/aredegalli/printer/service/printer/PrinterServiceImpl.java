@@ -5,7 +5,6 @@ import it.aredegalli.common.exception.NotFoundException;
 import it.aredegalli.printer.dto.printer.PrinterCreateDto;
 import it.aredegalli.printer.dto.printer.PrinterDto;
 import it.aredegalli.printer.dto.printer.PrinterFilterDto;
-import it.aredegalli.printer.dto.printer.control.PrinterStartRequestDto;
 import it.aredegalli.printer.mapper.printer.PrinterMapper;
 import it.aredegalli.printer.model.driver.Driver;
 import it.aredegalli.printer.model.printer.Printer;
@@ -139,11 +138,6 @@ public class PrinterServiceImpl implements PrinterService {
         return printerRepository.findPrinterByStatus_Code(status).stream()
                 .map(printerMapper::toDto)
                 .toList();
-    }
-
-    @Override
-    public UUID startPrint(PrinterStartRequestDto startRequestDto) {
-
     }
 
     /**

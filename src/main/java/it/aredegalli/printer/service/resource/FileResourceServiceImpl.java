@@ -27,6 +27,7 @@ public class FileResourceServiceImpl implements FileResourceService {
     private final StorageService storage;
     private final StlGlbConvertService stlGlbConvertService;
     private final ModelRepository modelRepository;
+    private final ResourceSecureDownloadHelper resourceSecureDownloadHelper;
 
     @Override
     @Transactional
@@ -88,10 +89,21 @@ public class FileResourceServiceImpl implements FileResourceService {
     }
 
     @Override
+    public InputStream download(String jwtToken) {
+        String resourceId = this.resourceSecureDownloadHelper.validateTokenAndExtractResourceId(jwtToken);
+        return this.download(UUID.fromString(resourceId));
+    }
+
+    @Override
     public InputStream downloadGlb(UUID id) {
         FileResource fr = repo.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("File non trovato: " + id));
         return stlGlbConvertService.downloadGlbByObjectkey(fr.getObjectKey());
+    }
+
+    @Override
+    public String ensureResource(UUID fileResourceId, UUID driverId) {
+        return this.resourceSecureDownloadHelper.generateSecureDownloadToken(fileResourceId.toString(), driverId.toString());
     }
 
 }

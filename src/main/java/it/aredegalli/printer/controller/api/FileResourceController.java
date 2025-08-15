@@ -58,6 +58,12 @@ public class FileResourceController {
         return _download(fileResourceService.downloadGlb(id), id);
     }
 
+    @GetMapping("/download/ensure")
+    public ResponseEntity<String> ensureDownload(@RequestParam("driverId") @NotNull UUID driverId, @RequestParam("resourceId") @NotNull UUID resourceId) {
+        log.info("FileResourceController", "Ensuring download resource for file ID: " + resourceId + " and driver ID: " + driverId);
+        return ResponseEntity.ok(this.fileResourceService.ensureResource(resourceId, driverId));
+    }
+
     private ResponseEntity<StreamingResponseBody> _download(InputStream inputStream, UUID id) {
         StreamingResponseBody responseBody = outputStream -> {
             try (inputStream) {

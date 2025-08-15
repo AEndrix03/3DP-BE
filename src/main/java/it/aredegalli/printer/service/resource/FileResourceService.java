@@ -16,5 +16,9 @@ public interface FileResourceService {
 
     InputStream download(UUID id);
 
+    InputStream download(String jwtToken);
+
     InputStream downloadGlb(UUID id);
+
+    String ensureResource(UUID fileResourceId, UUID driverId);
 }
