@@ -11,25 +11,28 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PrinterCommandServiceImpl implements PrinterCommandService {
 
+    private final Map<String, SseEmitter> emitters = new ConcurrentHashMap<>();
+
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final CommandExecutionRepository commandExecutionRepository;
 
-    @Override()
-    public CompletableFuture<SendResult<String, Object>> sendCommand(UUID driverId, String command, Integer priority) {
+    @Override
+    public UUID sendCommand(UUID driverId, String command, Integer priority) {
         log.info("Sending command to printer connected to driver id: {}", driverId);
 
         CommandExecution exec = this.commandExecutionRepository.save(CommandExecution.builder()
@@ -47,7 +50,7 @@ public class PrinterCommandServiceImpl implements PrinterCommandService {
                 .priority(priority)
                 .build();
 
-        return this.kafkaTemplate.send(KafkaTopicEnum.PRINTER_COMMAND_REQUEST.getTopicName(), driverId.toString(), request)
+        this.kafkaTemplate.send(KafkaTopicEnum.PRINTER_COMMAND_REQUEST.getTopicName(), driverId.toString(), request)
                 .whenComplete((result, ex) -> {
                     if (ex == null) {
                         log.info("Printer command sent successfully: offset={}", result.getRecordMetadata().offset());
@@ -55,6 +58,20 @@ public class PrinterCommandServiceImpl implements PrinterCommandService {
                         log.error("Failed to send printer command request", ex);
                     }
                 });
+
+        return exec.getId();
+    }
+
+    @Override
+    public SseEmitter createEmitter(String requestId) {
+        SseEmitter emitter = new SseEmitter(300000L);
+
+        emitter.onCompletion(() -> emitters.remove(requestId));
+        emitter.onTimeout(() -> emitters.remove(requestId));
+        emitter.onError(e -> emitters.remove(requestId));
+
+        emitters.put(requestId, emitter);
+        return emitter;
     }
 
     @KafkaListener(topics = "printer-command-response", groupId = "printer-server")
@@ -77,6 +94,17 @@ public class PrinterCommandServiceImpl implements PrinterCommandService {
 
         this.commandExecutionRepository.save(execution);
         log.info("[COMMAND EXECUTION] Command execution processed successfully for driver {} and request {}", response.getDriverId(), response.getRequestId());
+
+        if (this.emitters.containsKey(response.getRequestId())) {
+            SseEmitter emitter = emitters.get(response.getRequestId());
+            try {
+                emitter.send(SseEmitter.event()
+                        .name("commandExecutionResponse")
+                        .data(response));
+            } catch (IOException e) {
+                emitters.remove(response.getRequestId());
+            }
+        }
     }
 
     private static PrinterCommandResponseDto deserializeCommandResponse(Object payload) {
