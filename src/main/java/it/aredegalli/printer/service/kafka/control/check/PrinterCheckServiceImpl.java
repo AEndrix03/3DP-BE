@@ -47,7 +47,7 @@ public class PrinterCheckServiceImpl implements PrinterCheckService {
                 .criteria(criteria)
                 .build();
 
-        return this.kafkaTemplate.send(KafkaTopicEnum.PRINTER_HEARTBEATH_REQUEST.getTopicName(), driverId.toString(), request)
+        return this.kafkaTemplate.send(KafkaTopicEnum.PRINTER_CHECK_REQUEST.getTopicName(), driverId.toString(), request)
                 .whenComplete((result, ex) -> {
                     if (ex == null) {
                         log.info("Printer check sent successfully: offset={}",
@@ -85,7 +85,7 @@ public class PrinterCheckServiceImpl implements PrinterCheckService {
         printer.setStatus(printerStatus);
         printer.setLastSeen(Instant.now());
 
-        job.setStatus(JobStatusEnum.valueOf(check.getJobStatusCode()));
+        job.setStatus(JobStatusEnum.decode(check.getJobStatusCode()));
         job.setProgress(Integer.parseInt(check.getCommandOffset()));
 
         JobProgressSnapshot progress = JobProgressSnapshot.builder()

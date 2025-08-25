@@ -14,8 +14,21 @@ public enum JobStatusEnum {
     PAUSED("PAU"),
     COMPLETED("CMP"),
     FAILED("FAI"),
-    CANCELLED("CNC");
+    CANCELLED("CNC"),
+    PRECHECK("PRE"),
+    HOMING("HOM"),
+    LOADING("LOA"),
+    HEATING("HEA");
 
     private final String code;
+
+    public static JobStatusEnum decode(String code) {
+        for (JobStatusEnum status : JobStatusEnum.values()) {
+            if (status.getCode().equals(code)) {
+                return status;
+            }
+        }
+        throw new IllegalArgumentException("Unknown JobStatusEnum code: " + code);
+    }
 
 }
