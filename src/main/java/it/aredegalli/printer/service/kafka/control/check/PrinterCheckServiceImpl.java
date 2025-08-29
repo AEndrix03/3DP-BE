@@ -15,8 +15,10 @@ import it.aredegalli.printer.repository.printer.PrinterStatusRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
 
@@ -36,6 +38,7 @@ public class PrinterCheckServiceImpl implements PrinterCheckService {
     private final PrinterRepository printerRepository;
     private final PrinterStatusRepository printerStatusRepository;
     private final JobProgressSnapshotRepository jobProgressSnapshotRepository;
+    private final TaskExecutor kafkaListenerTaskExecutor;
 
     @Override()
     public CompletableFuture<SendResult<String, Object>> checkPrinter(UUID driverId, UUID jobId, String criteria) {
@@ -59,68 +62,87 @@ public class PrinterCheckServiceImpl implements PrinterCheckService {
     }
 
     @KafkaListener(topics = "printer-check-response", groupId = "printer-server")
-    public void handlePrinterCheck(ConsumerRecord<String, Object> record) {
-        PrinterCheckResponseDto check = deserializeCheckResponse(record.value());
+    public void handlePrinterCheck(ConsumerRecord<String, Object> record, Acknowledgment ack) {
+        // Process record asynchronously to avoid blocking listener threads
+        this.kafkaListenerTaskExecutor.execute(() -> {
+            try {
+                PrinterCheckResponseDto check = deserializeCheckResponse(record.value());
 
-        Job job = this.jobRepository.findById(UUID.fromString(check.getJobId())).orElse(null);
-        Printer printer = this.printerRepository.findByDriverId(UUID.fromString(check.getDriverId())).orElse(null);
+                Job job = this.jobRepository.findById(UUID.fromString(check.getJobId())).orElse(null);
+                Printer printer = this.printerRepository.findByDriverId(UUID.fromString(check.getDriverId())).orElse(null);
 
-        if (printer == null) {
-            log.warn("[CHECK] Unknown driver check. Driver ID: {}", check.getDriverId());
-            return;
-        }
+                if (printer == null) {
+                    log.warn("[CHECK] Unknown driver check. Driver ID: {}", check.getDriverId());
+                    return;
+                }
 
-        if (job == null) {
-            log.warn("[CHECK] Unknown job check. Driver ID: {}", check.getDriverId());
-            return;
-        }
+                if (job == null) {
+                    log.warn("[CHECK] Unknown job check. Driver ID: {}", check.getDriverId());
+                    return;
+                }
 
-        PrinterStatus printerStatus = this.printerStatusRepository.findById(check.getPrinterStatusCode()).orElse(null);
+                PrinterStatus printerStatus = this.printerStatusRepository.findById(check.getPrinterStatusCode()).orElse(null);
 
-        if (printerStatus == null) {
-            log.warn("[CHECK] Unknown printer status code for driver {}: {}", check.getDriverId(), check.getPrinterStatusCode());
-            printerStatus = this.printerStatusRepository.findById("UNK").orElse(null);
-        }
+                if (printerStatus == null) {
+                    log.warn("[CHECK] Unknown printer status code for driver {}: {}", check.getDriverId(), check.getPrinterStatusCode());
+                    printerStatus = this.printerStatusRepository.findById("UNK").orElse(null);
+                }
 
-        printer.setStatus(printerStatus);
-        printer.setLastSeen(Instant.now());
+                printer.setStatus(printerStatus);
+                printer.setLastSeen(Instant.now());
 
-        job.setStatus(JobStatusEnum.decode(check.getJobStatusCode()));
-        job.setProgress(Integer.parseInt(check.getCommandOffset()));
+                job.setStatus(JobStatusEnum.decode(check.getJobStatusCode()));
+                try {
+                    job.setProgress(Integer.parseInt(check.getCommandOffset()));
+                } catch (Exception ignored) {
+                }
 
-        JobProgressSnapshot progress = JobProgressSnapshot.builder()
-                .job(job)
-                .recordedAt(Instant.now())
-                .statusCode(check.getJobStatusCode())
-                .xPosition(parseBigDecimal(check.getXPosition()))
-                .yPosition(parseBigDecimal(check.getYPosition()))
-                .zPosition(parseBigDecimal(check.getZPosition()))
-                .ePosition(parseBigDecimal(check.getEPosition()))
-                .feed(parseBigDecimal(check.getFeed()))
-                .currentLayer(parseInteger(check.getLayer()))
-                .layerHeight(parseBigDecimal(check.getLayerHeight()))
-                .extruderStatus(check.getExtruderStatus())
-                .extruderTemp(parseBigDecimal(check.getExtruderTemp()))
-                .bedTemp(parseBigDecimal(check.getBedTemp()))
-                .fanStatus(check.getFanStatus())
-                .fanSpeed(parseBigDecimal(check.getFanSpeed()))
-                .commandOffset(parseLong(check.getCommandOffset()))
-                .lastCommand(check.getLastCommand())
-                .averageSpeed(parseBigDecimal(check.getAverageSpeed()))
-                .exceptions(check.getExceptions())
-                .logs(check.getLogs())
-                .localProgressPercentage(null)
-                .estimatedRemainingTimeMin(null)
-                .materialUsedG(null)
-                .errorCount(this.getErrorCountFromLog(check.getLogs()))
-                .warningCount(this.getWarningCountFromLog(check.getLogs()))
-                .build();
+                JobProgressSnapshot progress = JobProgressSnapshot.builder()
+                        .job(job)
+                        .recordedAt(Instant.now())
+                        .statusCode(check.getJobStatusCode())
+                        .xPosition(parseBigDecimal(check.getXPosition()))
+                        .yPosition(parseBigDecimal(check.getYPosition()))
+                        .zPosition(parseBigDecimal(check.getZPosition()))
+                        .ePosition(parseBigDecimal(check.getEPosition()))
+                        .feed(parseBigDecimal(check.getFeed()))
+                        .currentLayer(parseInteger(check.getLayer()))
+                        .layerHeight(parseBigDecimal(check.getLayerHeight()))
+                        .extruderStatus(check.getExtruderStatus())
+                        .extruderTemp(parseBigDecimal(check.getExtruderTemp()))
+                        .bedTemp(parseBigDecimal(check.getBedTemp()))
+                        .fanStatus(check.getFanStatus())
+                        .fanSpeed(parseBigDecimal(check.getFanSpeed()))
+                        .commandOffset(parseLong(check.getCommandOffset()))
+                        .lastCommand(check.getLastCommand())
+                        .averageSpeed(parseBigDecimal(check.getAverageSpeed()))
+                        .exceptions(check.getExceptions())
+                        .logs(check.getLogs())
+                        .localProgressPercentage(null)
+                        .estimatedRemainingTimeMin(null)
+                        .materialUsedG(null)
+                        .errorCount(this.getErrorCountFromLog(check.getLogs()))
+                        .warningCount(this.getWarningCountFromLog(check.getLogs()))
+                        .build();
 
-        this.printerRepository.save(printer);
-        this.jobRepository.save(job);
-        this.jobProgressSnapshotRepository.save(progress);
+                this.printerRepository.save(printer);
+                this.jobRepository.save(job);
+                this.jobProgressSnapshotRepository.save(progress);
 
-        log.info("[CHECK] Printer check processed successfully for driver {} and job {}", check.getDriverId(), check.getJobId());
+                log.info("[CHECK] Printer check processed successfully for driver {} and job {}", check.getDriverId(), check.getJobId());
+            } catch (Exception e) {
+                log.error("[CHECK] Failed to process printer check record: key={} partition={} offset={}",
+                        record.key(), record.partition(), record.offset(), e);
+            } finally {
+                try {
+                    if (ack != null) {
+                        ack.acknowledge();
+                    }
+                } catch (Exception e) {
+                    log.error("[CHECK] Failed to acknowledge record: key={} partition={} offset={}", record.key(), record.partition(), record.offset(), e);
+                }
+            }
+        });
     }
 
     private Integer getErrorCountFromLog(String checkLog) {

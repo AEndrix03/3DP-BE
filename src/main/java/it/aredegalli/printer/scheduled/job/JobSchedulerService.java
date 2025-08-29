@@ -43,10 +43,10 @@ public class JobSchedulerService {
     /**
      * Check for jobs that need to be processed every minute
      */
-    @Scheduled(fixedDelay = 60000) // 1 minute
+    @Scheduled(fixedDelay = 1000) // 1 minute
     public void scheduleJobExecution() {
         try {
-            logService.debug("JobSchedulerService", "Checking for jobs to schedule...");
+            //logService.debug("JobSchedulerService", "Checking for jobs to schedule...");
 
             List<Job> queuedJobs = jobRepository.findByStatusOrderByCreatedAtAsc(JobStatusEnum.QUEUED);
             List<Job> createdJobs = jobRepository.findByStatusOrderByCreatedAtAsc(JobStatusEnum.CREATED);

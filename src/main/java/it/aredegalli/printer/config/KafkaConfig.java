@@ -75,7 +75,8 @@ public class KafkaConfig {
         configProps.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class.getName());
 
         configProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
-        configProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
+        // Let the Spring Kafka container handle commits via AckMode; disable auto commit to avoid duplicate reprocessing
+        configProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         configProps.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 1000);
         configProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
         configProps.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 10000);
@@ -96,8 +97,20 @@ public class KafkaConfig {
         // Performance settings
         factory.setConcurrency(3); // 3 consumer threads per topic
         factory.getContainerProperties().setPollTimeout(3000);
-        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.BATCH);
+        // Use manual immediate ack so we can control commit after processing (used with async processing)
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
 
         return factory;
+    }
+
+    @Bean(name = "kafkaListenerTaskExecutor")
+    public org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor kafkaListenerTaskExecutor() {
+        org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor executor = new org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(10);
+        executor.setMaxPoolSize(50);
+        executor.setQueueCapacity(1000);
+        executor.setThreadNamePrefix("kafka-listener-");
+        executor.initialize();
+        return executor;
     }
 }

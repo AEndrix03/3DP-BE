@@ -18,7 +18,8 @@ public enum JobStatusEnum {
     PRECHECK("PRE"),
     HOMING("HOM"),
     LOADING("LOA"),
-    HEATING("HEA");
+    HEATING("HEA"),
+    UNKNOWN("UNK");
 
     private final String code;
 

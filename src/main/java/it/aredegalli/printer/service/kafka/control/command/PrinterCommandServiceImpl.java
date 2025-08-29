@@ -9,8 +9,10 @@ import it.aredegalli.printer.repository.job.CommandExecutionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -30,6 +32,7 @@ public class PrinterCommandServiceImpl implements PrinterCommandService {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final CommandExecutionRepository commandExecutionRepository;
+    private final TaskExecutor kafkaListenerTaskExecutor;
 
     @Override
     public UUID sendCommand(UUID driverId, String command, Integer priority) {
@@ -75,36 +78,50 @@ public class PrinterCommandServiceImpl implements PrinterCommandService {
     }
 
     @KafkaListener(topics = "printer-command-response", groupId = "printer-server")
-    public void handlePrinterCommandResponse(ConsumerRecord<String, Object> record) {
-        PrinterCommandResponseDto response = deserializeCommandResponse(record.value());
-
-        CommandExecution execution = this.commandExecutionRepository.findById(UUID.fromString(response.getRequestId()))
-                .orElse(null);
-
-        if (execution == null) {
-            log.warn("[COMMAND EXECUTION] Unknown command response. Driver ID: {}, Request ID: {}", response.getDriverId(), response.getRequestId());
-            return;
-        }
-
-        execution.setOk(response.getOk());
-        execution.setStatus(response.getOk() ? PrinterCommandExecutionStatusEnum.COMPLETED : PrinterCommandExecutionStatusEnum.FAILED);
-        execution.setException(response.getException());
-        execution.setInfo(response.getInfo());
-        execution.setFinishedAt(Instant.now());
-
-        this.commandExecutionRepository.save(execution);
-        log.info("[COMMAND EXECUTION] Command execution processed successfully for driver {} and request {}", response.getDriverId(), response.getRequestId());
-
-        if (this.emitters.containsKey(response.getRequestId())) {
-            SseEmitter emitter = emitters.get(response.getRequestId());
+    public void handlePrinterCommandResponse(ConsumerRecord<String, Object> record, Acknowledgment ack) {
+        this.kafkaListenerTaskExecutor.execute(() -> {
             try {
-                emitter.send(SseEmitter.event()
-                        .name("commandExecutionResponse")
-                        .data(response));
-            } catch (IOException e) {
-                emitters.remove(response.getRequestId());
+                PrinterCommandResponseDto response = deserializeCommandResponse(record.value());
+
+                CommandExecution execution = this.commandExecutionRepository.findById(UUID.fromString(response.getRequestId()))
+                        .orElse(null);
+
+                if (execution == null) {
+                    log.warn("[COMMAND EXECUTION] Unknown command response. Driver ID: {}, Request ID: {}", response.getDriverId(), response.getRequestId());
+                    return;
+                }
+
+                execution.setOk(response.getOk());
+                execution.setStatus(response.getOk() ? PrinterCommandExecutionStatusEnum.COMPLETED : PrinterCommandExecutionStatusEnum.FAILED);
+                execution.setException(response.getException());
+                execution.setInfo(response.getInfo());
+                execution.setFinishedAt(Instant.now());
+
+                this.commandExecutionRepository.save(execution);
+                log.info("[COMMAND EXECUTION] Command execution processed successfully for driver {} and request {}", response.getDriverId(), response.getRequestId());
+
+                if (this.emitters.containsKey(response.getRequestId())) {
+                    SseEmitter emitter = emitters.get(response.getRequestId());
+                    try {
+                        emitter.send(SseEmitter.event()
+                                .name("commandExecutionResponse")
+                                .data(response));
+                    } catch (IOException e) {
+                        emitters.remove(response.getRequestId());
+                    }
+                }
+            } catch (Exception e) {
+                log.error("[COMMAND EXECUTION] Failed to process command response record: key={} partition={} offset={}", record.key(), record.partition(), record.offset(), e);
+            } finally {
+                try {
+                    if (ack != null) {
+                        ack.acknowledge();
+                    }
+                } catch (Exception e) {
+                    log.error("[COMMAND EXECUTION] Failed to acknowledge command response record: key={} partition={} offset={}", record.key(), record.partition(), record.offset(), e);
+                }
             }
-        }
+        });
     }
 
     private static PrinterCommandResponseDto deserializeCommandResponse(Object payload) {
