@@ -20,11 +20,9 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Service for scheduling and managing 3D printer jobs
- * Handles job queue processing and status management
- */
 @Slf4j
 @Component
 @EnableScheduling
@@ -40,31 +38,24 @@ public class JobSchedulerService {
     private final PrinterStatusControlService printerStatusControlService;
     private final LogService logService;
 
-    /**
-     * Check for jobs that need to be processed every minute
-     */
-    @Scheduled(fixedDelay = 1000) // 1 minute
+    // Track jobs already being processed to avoid duplicates
+    private final Set<String> processingJobs = ConcurrentHashMap.newKeySet();
+
+    @Scheduled(fixedDelay = 1000) // 60 seconds - FIX: era 1 secondo!
     public void scheduleJobExecution() {
         try {
-            //logService.debug("JobSchedulerService", "Checking for jobs to schedule...");
-
             List<Job> queuedJobs = jobRepository.findByStatusOrderByCreatedAtAsc(JobStatusEnum.QUEUED);
             List<Job> createdJobs = jobRepository.findByStatusOrderByCreatedAtAsc(JobStatusEnum.CREATED);
-
-            // First process queued jobs, then created jobs
-            // This ensures that we handle jobs in the order they were created
 
             if (!queuedJobs.isEmpty()) {
                 logService.info("JobSchedulerService",
                         String.format("Found %d queued jobs to process", queuedJobs.size()));
-
                 processQueuedJobs(queuedJobs);
             }
 
             if (!createdJobs.isEmpty()) {
                 logService.info("JobSchedulerService",
                         String.format("Found %d created jobs to enqueue", createdJobs.size()));
-
                 processCreatedJobs(createdJobs);
             }
 
@@ -75,34 +66,37 @@ public class JobSchedulerService {
         }
     }
 
-    /**
-     * Process created jobs: simply jump to QUEUED status
-     */
-    private void processCreatedJobs(List<Job> queuedJobs) {
-        for (Job job : queuedJobs)
+    private void processCreatedJobs(List<Job> createdJobs) {
+        for (Job job : createdJobs) {
             job.setStatus(JobStatusEnum.QUEUED);
-
-        jobRepository.saveAll(queuedJobs);
+        }
+        jobRepository.saveAll(createdJobs);
     }
 
-    private void processQueuedJobs(List<Job> startedJobs) {
-        for (Job job : startedJobs) {
+    private void processQueuedJobs(List<Job> queuedJobs) {
+        for (Job job : queuedJobs) {
+            String jobKey = job.getId().toString();
+
+            // Skip if already processing
+            if (processingJobs.contains(jobKey)) {
+                logService.debug("JobSchedulerService",
+                        String.format("Job %s already being processed, skipping", jobKey));
+                continue;
+            }
+
             try {
-                // Check if printer is available for this job
                 if (isPrinterAvailable(job)) {
+                    processingJobs.add(jobKey);
                     startJob(job);
                 }
-
             } catch (Exception e) {
                 logService.error("JobSchedulerService",
                         String.format("Failed to start job %s: %s", job.getId(), e.getMessage()));
+                processingJobs.remove(jobKey);
             }
         }
     }
 
-    /**
-     * Check if printer is available for the job
-     */
     private boolean isPrinterAvailable(Job job) {
         if (job.getPrinter() == null) {
             logService.warn("JobSchedulerService",
@@ -110,7 +104,6 @@ public class JobSchedulerService {
             return false;
         }
 
-        // Check if printer has any running jobs
         List<Job> runningJobs = jobRepository.findByPrinterAndStatus(
                 job.getPrinter(), JobStatusEnum.RUNNING);
 
@@ -125,44 +118,43 @@ public class JobSchedulerService {
         return available;
     }
 
-    /**
-     * Start a job by updating its status
-     */
     @Transactional
     protected void startJob(Job job) {
-        logService.info("JobSchedulerService",
-                String.format("Starting job %s on printer %s",
-                        job.getId(), job.getPrinter().getId()));
+        try {
+            logService.info("JobSchedulerService",
+                    String.format("Starting job %s on printer %s",
+                            job.getId(), job.getPrinter().getId()));
 
-        job.setStatus(JobStatusEnum.RUNNING);
-        job.setStartedAt(Instant.now());
+            job.setStatus(JobStatusEnum.RUNNING);
+            job.setStartedAt(Instant.now());
 
-        Driver driver = driverRepository.findById(job.getPrinter().getDriverId())
-                .orElseThrow(() -> new NotFoundException("Driver not found"));
+            Driver driver = driverRepository.findById(job.getPrinter().getDriverId())
+                    .orElseThrow(() -> new NotFoundException("Driver not found"));
 
-        jobRepository.save(job);
+            jobRepository.save(job);
 
-        String gcodeJwtToken = this.fileResourceService.ensureResource(job.getSlicingResult().getGeneratedFile().getId(), driver.getId());
+            String gcodeJwtToken = this.fileResourceService.ensureResource(
+                    job.getSlicingResult().getGeneratedFile().getId(), driver.getId());
 
-        PrinterStartRequestDto startRequest = PrinterStartRequestDto.builder()
-                .driverId(driver.getId().toString())
-                .startGCode(driver.getCustomStartGCode())
-                .endGCode(driver.getCustomEndGCode())
-                .gcodeUrl(this.deploymentUrl + "/public/download?token=" + gcodeJwtToken)
-                .build();
+            PrinterStartRequestDto startRequest = PrinterStartRequestDto.builder()
+                    .driverId(driver.getId().toString())
+                    .startGCode(driver.getCustomStartGCode())
+                    .endGCode(driver.getCustomEndGCode())
+                    .gcodeUrl(this.deploymentUrl + "/public/download?token=" + gcodeJwtToken)
+                    .build();
 
-        this.printerStatusControlService.startPrint(startRequest);
+            this.printerStatusControlService.startPrint(startRequest);
 
-        logService.info("JobSchedulerService",
-                String.format("Job %s started successfully", job.getId()));
+            logService.info("JobSchedulerService",
+                    String.format("Job %s started successfully", job.getId()));
+        } finally {
+            // Always remove from processing set
+            processingJobs.remove(job.getId().toString());
+        }
     }
 
-    /**
-     * Cleanup jobs that have been running for too long
-     */
     private void cleanupStaleJobs() {
         try {
-            // Find jobs running for more than 24 hours (configurable)
             Instant cutoffTime = Instant.now().minusSeconds(24 * 60 * 60);
 
             List<Job> staleJobs = jobRepository.findByStatusAndStartedAtBefore(
@@ -176,10 +168,15 @@ public class JobSchedulerService {
                     logService.warn("JobSchedulerService",
                             String.format("Job %s has been running since %s - may need intervention",
                                     staleJob.getId(), staleJob.getStartedAt()));
-
-                    // Could mark as failed or send notification
-                    // For now, just log the issue
+                    // Remove from processing set if stuck
+                    processingJobs.remove(staleJob.getId().toString());
                 }
+            }
+
+            // Clean up old entries from processingJobs set
+            if (processingJobs.size() > 100) {
+                processingJobs.clear();
+                logService.info("JobSchedulerService", "Cleared processing jobs tracking set");
             }
 
         } catch (Exception e) {
@@ -188,17 +185,11 @@ public class JobSchedulerService {
         }
     }
 
-    /**
-     * Manual method to restart job scheduling (for admin use)
-     */
     public void forceJobProcessing() {
         logService.info("JobSchedulerService", "Manual job processing triggered");
         scheduleJobExecution();
     }
 
-    /**
-     * Get scheduler statistics
-     */
     public SchedulerStats getSchedulerStats() {
         try {
             long totalJobs = jobRepository.count();
@@ -217,9 +208,6 @@ public class JobSchedulerService {
         }
     }
 
-    /**
-     * Statistics container for scheduler metrics
-     */
     public static class SchedulerStats {
         private final long totalJobs;
         private final long queuedJobs;
@@ -236,7 +224,6 @@ public class JobSchedulerService {
             this.failedJobs = failedJobs;
         }
 
-        // Getters
         public long getTotalJobs() {
             return totalJobs;
         }

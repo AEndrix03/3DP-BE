@@ -15,6 +15,8 @@ public interface JobRepository extends UUIDRepository<Job> {
 
     List<Job> findByStatusOrderByCreatedAtAsc(JobStatusEnum jobStatusEnum);
 
+    List<Job> findByStatusInOrderByCreatedAtAsc(List<JobStatusEnum> statuses);
+
     List<Job> findByPrinterAndStatus(Printer printer, JobStatusEnum status);
 
     List<Job> findByStatusAndStartedAtBefore(JobStatusEnum status, Instant startedAtBefore);

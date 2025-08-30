@@ -15,7 +15,6 @@ import it.aredegalli.printer.repository.printer.PrinterStatusRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.springframework.core.task.TaskExecutor;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.Acknowledgment;
@@ -25,8 +24,10 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
@@ -38,11 +39,14 @@ public class PrinterCheckServiceImpl implements PrinterCheckService {
     private final PrinterRepository printerRepository;
     private final PrinterStatusRepository printerStatusRepository;
     private final JobProgressSnapshotRepository jobProgressSnapshotRepository;
-    private final TaskExecutor kafkaListenerTaskExecutor;
 
-    @Override()
+    // Track processed messages to avoid duplicates
+    private final Set<String> recentlyProcessed = ConcurrentHashMap.newKeySet();
+    private static final long DUPLICATE_WINDOW_MS = 5000; // 5 seconds
+
+    @Override
     public CompletableFuture<SendResult<String, Object>> checkPrinter(UUID driverId, UUID jobId, String criteria) {
-        log.info("Checking printer connected to driver id: {}", driverId);
+        log.info("Sending check request for driver {} and job {}", driverId, jobId);
 
         PrinterCheckRequestDto request = PrinterCheckRequestDto.builder()
                 .driverId(driverId.toString())
@@ -53,7 +57,7 @@ public class PrinterCheckServiceImpl implements PrinterCheckService {
         return this.kafkaTemplate.send(KafkaTopicEnum.PRINTER_CHECK_REQUEST.getTopicName(), driverId.toString(), request)
                 .whenComplete((result, ex) -> {
                     if (ex == null) {
-                        log.info("Printer check sent successfully: offset={}",
+                        log.debug("Printer check sent successfully: offset={}",
                                 result.getRecordMetadata().offset());
                     } else {
                         log.error("Failed to send printer check request", ex);
@@ -61,105 +65,123 @@ public class PrinterCheckServiceImpl implements PrinterCheckService {
                 });
     }
 
-    @KafkaListener(topics = "printer-check-response", groupId = "printer-server")
+    @KafkaListener(topics = "printer-check-response", groupId = "printer-server", containerFactory = "kafkaListenerContainerFactory")
     public void handlePrinterCheck(ConsumerRecord<String, Object> record, Acknowledgment ack) {
-        // Process record asynchronously to avoid blocking listener threads
-        this.kafkaListenerTaskExecutor.execute(() -> {
-            try {
-                PrinterCheckResponseDto check = deserializeCheckResponse(record.value());
+        // Acknowledge immediately to prevent re-delivery
+        if (ack != null) {
+            ack.acknowledge();
+        }
 
-                Job job = this.jobRepository.findById(UUID.fromString(check.getJobId())).orElse(null);
-                Printer printer = this.printerRepository.findByDriverId(UUID.fromString(check.getDriverId())).orElse(null);
+        try {
+            PrinterCheckResponseDto check = deserializeCheckResponse(record.value());
 
-                if (printer == null) {
-                    log.warn("[CHECK] Unknown driver check. Driver ID: {}", check.getDriverId());
-                    return;
-                }
-
-                if (job == null) {
-                    log.warn("[CHECK] Unknown job check. Driver ID: {}", check.getDriverId());
-                    return;
-                }
-
-                PrinterStatus printerStatus = this.printerStatusRepository.findById(check.getPrinterStatusCode()).orElse(null);
-
-                if (printerStatus == null) {
-                    log.warn("[CHECK] Unknown printer status code for driver {}: {}", check.getDriverId(), check.getPrinterStatusCode());
-                    printerStatus = this.printerStatusRepository.findById("UNK").orElse(null);
-                }
-
-                printer.setStatus(printerStatus);
-                printer.setLastSeen(Instant.now());
-
-                job.setStatus(JobStatusEnum.decode(check.getJobStatusCode()));
-                try {
-                    job.setProgress(Integer.parseInt(check.getCommandOffset()));
-                } catch (Exception ignored) {
-                }
-
-                JobProgressSnapshot progress = JobProgressSnapshot.builder()
-                        .job(job)
-                        .recordedAt(Instant.now())
-                        .statusCode(check.getJobStatusCode())
-                        .xPosition(parseBigDecimal(check.getXPosition()))
-                        .yPosition(parseBigDecimal(check.getYPosition()))
-                        .zPosition(parseBigDecimal(check.getZPosition()))
-                        .ePosition(parseBigDecimal(check.getEPosition()))
-                        .feed(parseBigDecimal(check.getFeed()))
-                        .currentLayer(parseInteger(check.getLayer()))
-                        .layerHeight(parseBigDecimal(check.getLayerHeight()))
-                        .extruderStatus(check.getExtruderStatus())
-                        .extruderTemp(parseBigDecimal(check.getExtruderTemp()))
-                        .bedTemp(parseBigDecimal(check.getBedTemp()))
-                        .fanStatus(check.getFanStatus())
-                        .fanSpeed(parseBigDecimal(check.getFanSpeed()))
-                        .commandOffset(parseLong(check.getCommandOffset()))
-                        .lastCommand(check.getLastCommand())
-                        .averageSpeed(parseBigDecimal(check.getAverageSpeed()))
-                        .exceptions(check.getExceptions())
-                        .logs(check.getLogs())
-                        .localProgressPercentage(null)
-                        .estimatedRemainingTimeMin(null)
-                        .materialUsedG(null)
-                        .errorCount(this.getErrorCountFromLog(check.getLogs()))
-                        .warningCount(this.getWarningCountFromLog(check.getLogs()))
-                        .build();
-
-                this.printerRepository.save(printer);
-                this.jobRepository.save(job);
-                this.jobProgressSnapshotRepository.save(progress);
-
-                log.info("[CHECK] Printer check processed successfully for driver {} and job {}", check.getDriverId(), check.getJobId());
-            } catch (Exception e) {
-                log.error("[CHECK] Failed to process printer check record: key={} partition={} offset={}",
-                        record.key(), record.partition(), record.offset(), e);
-            } finally {
-                try {
-                    if (ack != null) {
-                        ack.acknowledge();
-                    }
-                } catch (Exception e) {
-                    log.error("[CHECK] Failed to acknowledge record: key={} partition={} offset={}", record.key(), record.partition(), record.offset(), e);
-                }
+            // Duplicate detection
+            String messageKey = check.getDriverId() + "-" + check.getJobId() + "-" + System.currentTimeMillis() / 1000;
+            if (!recentlyProcessed.add(messageKey)) {
+                log.debug("[CHECK] Duplicate check ignored for driver {} and job {}",
+                        check.getDriverId(), check.getJobId());
+                return;
             }
-        });
+
+            // Clean old entries periodically
+            if (recentlyProcessed.size() > 1000) {
+                recentlyProcessed.clear();
+            }
+
+            processCheckResponse(check);
+
+        } catch (Exception e) {
+            log.error("[CHECK] Failed to process printer check record: key={} partition={} offset={}",
+                    record.key(), record.partition(), record.offset(), e);
+        }
+    }
+
+    private void processCheckResponse(PrinterCheckResponseDto check) {
+        Job job = this.jobRepository.findById(UUID.fromString(check.getJobId())).orElse(null);
+        Printer printer = this.printerRepository.findByDriverId(UUID.fromString(check.getDriverId())).orElse(null);
+
+        if (printer == null) {
+            log.warn("[CHECK] Unknown driver check. Driver ID: {}", check.getDriverId());
+            return;
+        }
+
+        if (job == null) {
+            log.warn("[CHECK] Unknown job check. Job ID: {}", check.getJobId());
+            return;
+        }
+
+        PrinterStatus printerStatus = this.printerStatusRepository.findById(check.getPrinterStatusCode()).orElse(null);
+
+        if (printerStatus == null) {
+            log.warn("[CHECK] Unknown printer status code for driver {}: {}", check.getDriverId(), check.getPrinterStatusCode());
+            printerStatus = this.printerStatusRepository.findById("UNK").orElse(null);
+        }
+
+        printer.setStatus(printerStatus);
+        printer.setLastSeen(Instant.now());
+
+        JobStatusEnum previousStatus = job.getStatus();
+        job.setStatus(JobStatusEnum.decode(check.getJobStatusCode()));
+
+        try {
+            job.setProgress(Integer.parseInt(check.getCommandOffset()));
+        } catch (Exception ignored) {
+        }
+
+        JobProgressSnapshot progress = JobProgressSnapshot.builder()
+                .job(job)
+                .recordedAt(Instant.now())
+                .statusCode(check.getJobStatusCode())
+                .xPosition(parseBigDecimal(check.getXPosition()))
+                .yPosition(parseBigDecimal(check.getYPosition()))
+                .zPosition(parseBigDecimal(check.getZPosition()))
+                .ePosition(parseBigDecimal(check.getEPosition()))
+                .feed(parseBigDecimal(check.getFeed()))
+                .currentLayer(parseInteger(check.getLayer()))
+                .layerHeight(parseBigDecimal(check.getLayerHeight()))
+                .extruderStatus(check.getExtruderStatus())
+                .extruderTemp(parseBigDecimal(check.getExtruderTemp()))
+                .bedTemp(parseBigDecimal(check.getBedTemp()))
+                .fanStatus(check.getFanStatus())
+                .fanSpeed(parseBigDecimal(check.getFanSpeed()))
+                .commandOffset(parseLong(check.getCommandOffset()))
+                .lastCommand(check.getLastCommand())
+                .averageSpeed(parseBigDecimal(check.getAverageSpeed()))
+                .exceptions(check.getExceptions())
+                .logs(check.getLogs())
+                .localProgressPercentage(null)
+                .estimatedRemainingTimeMin(null)
+                .materialUsedG(null)
+                .errorCount(this.getErrorCountFromLog(check.getLogs()))
+                .warningCount(this.getWarningCountFromLog(check.getLogs()))
+                .build();
+
+        this.printerRepository.save(printer);
+        this.jobRepository.save(job);
+        this.jobProgressSnapshotRepository.save(progress);
+
+        if (previousStatus != job.getStatus()) {
+            log.info("[CHECK] Job {} status changed from {} to {}",
+                    check.getJobId(), previousStatus, job.getStatus());
+        }
+
+        log.debug("[CHECK] Printer check processed for driver {} and job {}",
+                check.getDriverId(), check.getJobId());
     }
 
     private Integer getErrorCountFromLog(String checkLog) {
-        return checkLog.split("ERR").length;
+        return checkLog != null ? checkLog.split("ERR").length - 1 : 0;
     }
 
     private Integer getWarningCountFromLog(String checkLog) {
-        return checkLog.split("WARN").length;
+        return checkLog != null ? checkLog.split("WARN").length - 1 : 0;
     }
 
     private static PrinterCheckResponseDto deserializeCheckResponse(Object payload) {
-        PrinterCheckResponseDto check;
-
         if (payload instanceof LinkedHashMap<?, ?>) {
             @SuppressWarnings("unchecked")
             Map<String, Object> map = (Map<String, Object>) payload;
-            check = PrinterCheckResponseDto.builder()
+            return PrinterCheckResponseDto.builder()
                     .jobId((String) map.get("jobId"))
                     .driverId((String) map.get("driverId"))
                     .jobStatusCode((String) map.get("jobStatusCode"))
@@ -183,11 +205,10 @@ public class PrinterCheckServiceImpl implements PrinterCheckService {
                     .logs((String) map.get("logs"))
                     .build();
         } else if (payload instanceof PrinterCheckResponseDto) {
-            check = (PrinterCheckResponseDto) payload;
+            return (PrinterCheckResponseDto) payload;
         } else {
             throw new IllegalArgumentException("Unsupported payload type: " + payload.getClass());
         }
-        return check;
     }
 
     private static java.math.BigDecimal parseBigDecimal(String value) {
